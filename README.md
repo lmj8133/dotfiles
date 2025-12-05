@@ -17,7 +17,7 @@
 
 ## Prerequisites
 
-- **OS**: Ubuntu/Debian Linux (or WSL2)
+- **OS**: Ubuntu/Debian Linux, macOS, or WSL2
 - **Permissions**: Script auto-detects if you need sudo
 - **Internet**: Required for downloading packages and plugins
 
