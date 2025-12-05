@@ -65,6 +65,7 @@ When you first start Zsh, Powerlevel10k will run the configuration wizard. Follo
 ```
 dotfiles/
 ├── bootstrap.sh         # Main bootstrap script (sets up entire dev environment)
+├── uninstall.sh         # Uninstall script (removes all configs and plugins)
 ├── zprofile             # Zsh login-time environment (Homebrew, locale)
 ├── zshrc                # Zsh interactive config (plugins, aliases, keybindings)
 ├── init.lua             # Neovim configuration (LSP, plugins, keymaps)
@@ -202,20 +203,58 @@ source ~/.zshrc
 
 ## Uninstallation
 
-To remove installed configs (keeps system packages):
+### One-Click Cleanup (Recommended)
+
+Run the automated uninstall script with safety confirmations:
+
+```bash
+./uninstall.sh
+```
+
+**Dry-run mode** (preview what will be removed):
+```bash
+./uninstall.sh --dry-run
+```
+
+**What the script removes:**
+- Zsh configs: `~/.zshrc`, `~/.zprofile`, `~/.zsh_history`, `~/.zshrc.local`
+- Powerlevel10k config: `~/.p10k.zsh`
+- Neovim: `~/.config/nvim`, `~/.local/share/nvim`, `~/.local/state/nvim`, `~/.cache/nvim`
+- Zsh plugins: `~/.local/share/zsh-plugins`
+- NVM: `~/.nvm`
+- UV (Python toolchain): cache, managed Python versions, tools, and binaries
+  - Runs `uv cache clean` and `uv python dir` cleanup
+  - Removes `~/.local/bin/uv{,x,w}` (v0.5.0+) or `~/.cargo/bin/uv` (older versions)
+
+**What the script keeps:**
+- System packages (neovim, zsh, git, curl, etc.) — remove manually if needed:
+  ```bash
+  sudo apt-get remove neovim zsh git curl wget
+  ```
+
+### Manual Cleanup
+
+If you prefer manual removal:
 
 ```bash
 # Remove Zsh configs
-rm -f ~/.zshrc ~/.zprofile ~/.zsh_history
+rm -f ~/.zshrc ~/.zprofile ~/.zsh_history ~/.zshrc.local ~/.p10k.zsh
 
-# Remove Neovim config
-rm -rf ~/.config/nvim
+# Remove Neovim config and data
+rm -rf ~/.config/nvim ~/.local/share/nvim ~/.local/state/nvim ~/.cache/nvim
 
 # Remove plugins
 rm -rf ~/.local/share/zsh-plugins
 
 # Remove NVM
 rm -rf ~/.nvm
+
+# Remove UV (Python toolchain) - clean first, then remove binaries
+uv cache clean
+rm -r "$(uv python dir)"  # Remove managed Python versions
+rm -r "$(uv tool dir)"    # Remove UV tools
+rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw  # v0.5.0+
+rm -f ~/.cargo/bin/uv     # Older versions
 
 # Change shell back to bash (optional)
 chsh -s $(which bash)
