@@ -10,8 +10,8 @@
 - **Powerlevel10k Theme**: Fast and customizable prompt
 - **Neovim**: Modern Vim with LSP, Treesitter, Telescope, Copilot integration
 - **Node.js (NVM)**: Node 22 via nvm with tree-sitter-cli
-- **Smart Tools**: zoxide for smart directory jumping, fzf for fuzzy finding
-- **Python Support**: uv toolchain helpers (`act`, `pyinfo` commands)
+- **Smart Tools**: zoxide, fzf, fd-find, ripgrep for efficient navigation and searching
+- **Python Support**: uv toolchain with helpers (`act`, `pyinfo` commands)
 
 ---
 
@@ -38,11 +38,12 @@ cd /path/to/dotfiles
 ```
 
 **What it does:**
-- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide, fzf
+- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide, fzf, fd-find, ripgrep
 - Copies `zprofile`, `zshrc` to `~/.zprofile`, `~/.zshrc`
 - Copies `init.lua` to `~/.config/nvim/init.lua`
 - Clones Zsh plugins to `~/.local/share/zsh-plugins/`
 - Installs nvm + Node 22 + tree-sitter-cli
+- Installs uv (Python toolchain)
 - Configures locale to `en_US.UTF-8`
 
 ### 3. Change default shell to Zsh (optional)
@@ -238,21 +239,14 @@ Edit `~/.config/nvim/init.lua` directly, or organize configs in `~/.config/nvim/
 
 ## Additional Tools to Install (Optional)
 
-The setup script covers essentials, but you may want:
+The setup script covers all essentials. You may optionally want:
 
 ```bash
-# Better file finder (used by fzf if available)
-sudo apt-get install fd-find
-
-# Ripgrep for faster searching
-sudo apt-get install ripgrep
-
 # Pandoc for Markdown→PDF (used by :Md2Pdf in Neovim)
 sudo apt-get install pandoc texlive-xetex
-
-# Python uv toolchain (modern pip/venv alternative)
-curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+**Note**: fd-find, ripgrep, and uv are now installed automatically by the bootstrap script.
 
 ---
 

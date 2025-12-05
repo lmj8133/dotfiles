@@ -34,7 +34,9 @@ $SUDO apt-get install -y \
   clangd \
   locales \
   zoxide \
-  fzf
+  fzf \
+  fd-find \
+  ripgrep
 
 # ============================
 #  Copy zprofile / zshrc
@@ -125,6 +127,16 @@ nvm use 22
 npm install -g tree-sitter-cli
 
 # ============================
+#  UV (Python toolchain)
+# ============================
+if command -v uv &> /dev/null; then
+  echo "[INFO] uv already installed, skip"
+else
+  echo "[INFO] Installing uv (Python toolchain)"
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+
+# ============================
 #  Locale
 # ============================
 $SUDO locale-gen en_US.UTF-8
@@ -135,9 +147,12 @@ echo "===================================="
 echo "[DONE] Environment setup finished."
 echo " - Neovim / Zsh / plugins installed"
 echo " - nvm + Node 22 + tree-sitter-cli"
+echo " - uv (Python toolchain)"
+echo " - fd-find, ripgrep, fzf, zoxide"
 echo " - Locale: en_US.UTF-8"
 echo "===================================="
 echo
 echo "Remember to:"
 echo "  - chsh -s \$(which zsh)   # change your default shell to zsh (optional)"
+echo "  - Restart shell or run: source ~/.zshrc"
 
