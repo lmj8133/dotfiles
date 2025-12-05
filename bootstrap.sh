@@ -33,7 +33,8 @@ $SUDO apt-get install -y \
   libssl-dev \
   clangd \
   locales \
-  zoxide
+  zoxide \
+  fzf
 
 # ============================
 #  Copy zprofile / zshrc

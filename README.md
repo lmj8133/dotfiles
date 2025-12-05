@@ -38,7 +38,7 @@ cd /path/to/dotfiles
 ```
 
 **What it does:**
-- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide
+- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide, fzf
 - Copies `zprofile`, `zshrc` to `~/.zprofile`, `~/.zshrc`
 - Copies `init.lua` to `~/.config/nvim/init.lua`
 - Clones Zsh plugins to `~/.local/share/zsh-plugins/`
@@ -154,6 +154,7 @@ pyinfo     # Show Python/venv/uv status
 ### Smart Directory Navigation
 ```bash
 z <partial-name>    # Jump to frequently used directories (zoxide)
+zi                  # Interactive directory selector with search history (requires fzf)
 cd <dir>            # Auto-complete with smart case matching
 ```
 
