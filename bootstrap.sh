@@ -36,7 +36,8 @@ $SUDO apt-get install -y \
   zoxide \
   fzf \
   fd-find \
-  ripgrep
+  ripgrep \
+  gh
 
 # ============================
 #  Copy zprofile / zshrc

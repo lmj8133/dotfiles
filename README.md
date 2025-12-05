@@ -38,7 +38,7 @@ cd /path/to/dotfiles
 ```
 
 **What it does:**
-- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide, fzf, fd-find, ripgrep
+- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide, fzf, fd-find, ripgrep, gh
 - Copies `zprofile`, `zshrc` to `~/.zprofile`, `~/.zshrc`
 - Copies `init.lua` to `~/.config/nvim/init.lua`
 - Clones Zsh plugins to `~/.local/share/zsh-plugins/`
@@ -246,7 +246,7 @@ The setup script covers all essentials. You may optionally want:
 sudo apt-get install pandoc texlive-xetex
 ```
 
-**Note**: fd-find, ripgrep, and uv are now installed automatically by the bootstrap script.
+**Note**: fd-find, ripgrep, gh, and uv are now installed automatically by the bootstrap script.
 
 ---
 
