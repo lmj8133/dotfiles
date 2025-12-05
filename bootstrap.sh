@@ -31,7 +31,7 @@ $SUDO apt-get install -y \
   zsh \
   build-essential \
   libssl-dev \
-  clang \
+  clangd \
   locales \
   zoxide
 

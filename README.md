@@ -38,7 +38,7 @@ cd /path/to/dotfiles
 ```
 
 **What it does:**
-- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clang, zoxide
+- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide
 - Copies `zprofile`, `zshrc` to `~/.zprofile`, `~/.zshrc`
 - Copies `init.lua` to `~/.config/nvim/init.lua`
 - Clones Zsh plugins to `~/.local/share/zsh-plugins/`
