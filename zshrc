@@ -100,21 +100,27 @@ if [[ -d "$HOME/.local/bin" ]]; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
+# Separate virtual environments for WSL and Windows
+if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
+  export UV_PROJECT_ENVIRONMENT=".venv-wsl"
+fi
+
 _uv_exists() { command -v uv >/dev/null 2>&1; }
 
 # Activate nearest .venv upward
 act() {
   local d="$PWD"
+  local venv_name="${UV_PROJECT_ENVIRONMENT:-.venv}"
   while [[ "$d" != "/" ]]; do
-    if [[ -f "$d/.venv/bin/activate" ]]; then
-      [[ -n "$VIRTUAL_ENV" && "$VIRTUAL_ENV" != "$d/.venv" ]] && deactivate 2>/dev/null || true
-      source "$d/.venv/bin/activate"
-      printf "✅ Activated: %s\n" "$d/.venv"
+    if [[ -f "$d/$venv_name/bin/activate" ]]; then
+      [[ -n "$VIRTUAL_ENV" && "$VIRTUAL_ENV" != "$d/$venv_name" ]] && deactivate 2>/dev/null || true
+      source "$d/$venv_name/bin/activate"
+      printf "✅ Activated: %s\n" "$d/$venv_name"
       return 0
     fi
     d="$(dirname "$d")"
   done
-  printf "❌ No .venv found.\n" >&2
+  printf "❌ No %s found.\n" "$venv_name" >&2
   return 1
 }
 

@@ -149,9 +149,17 @@ The `zshrc` provides these helper functions:
 
 ### Python/uv Helpers
 ```bash
-act        # Auto-activate nearest .venv upward from current directory
+act        # Auto-activate nearest .venv (or .venv-wsl in WSL) upward from current directory
 pyinfo     # Show Python/venv/uv status
 ```
+
+**WSL Support**: The setup automatically detects WSL and uses `.venv-wsl` as the virtual environment directory to avoid conflicts when accessing the same project directory from both Windows and WSL.
+
+> **Note**: When working with shared directories between Windows and WSL, add both `.venv` and `.venv-wsl` to your project's `.gitignore`:
+> ```gitignore
+> .venv
+> .venv-wsl
+> ```
 
 ### Smart Directory Navigation
 ```bash
