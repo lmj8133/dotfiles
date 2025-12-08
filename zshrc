@@ -152,6 +152,14 @@ if typeset -f history-substring-search-up >/dev/null; then
   bindkey -M vicmd 'j'   history-substring-search-down
 fi
 
+########## Aliases ##########
+# ls with colors (cross-platform)
+if [[ "$IS_LINUX" == 1 ]]; then
+  alias ls='ls --color=always'
+elif [[ "$IS_MACOS" == 1 ]]; then
+  alias ls='ls -G'
+fi
+
 ########## Local overrides ##########
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
 
