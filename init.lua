@@ -515,14 +515,15 @@ vim.keymap.set('n', '<leader>w', ':w<CR>', { desc = '儲存檔案', silent = tru
 vim.keymap.set('n', '<leader>q', ':q<CR>', { desc = '退出', silent = true })
 vim.keymap.set('n', '<leader>e', ':NvimTreeToggle<CR>', { desc = '切換檔案樹', silent = true })
 
--- Telescope 快捷鍵
-vim.keymap.set('n', '<leader>ff', ':Telescope find_files<CR>', { desc = '尋找檔案', silent = true })
-vim.keymap.set('n', '<leader>fg', ':Telescope live_grep<CR>', { desc = '文字搜尋', silent = true })
-vim.keymap.set('n', '<leader>fb', ':Telescope buffers<CR>', { desc = '緩衝區列表', silent = true })
-vim.keymap.set('n', '<leader>fh', ':Telescope help_tags<CR>', { desc = '幫助文件', silent = true })
-vim.keymap.set('n', '<leader>fr', ':Telescope oldfiles<CR>', { desc = '最近檔案', silent = true })
-vim.keymap.set('n', '<leader>fc', ':Telescope commands<CR>', { desc = '命令列表', silent = true })
-vim.keymap.set('n', '<leader>fs', ':Telescope grep_string<CR>', { desc = '搜尋游標下的字串', silent = true })
+-- Telescope shortcuts
+vim.keymap.set('n', '<leader>ff', ':Telescope find_files<CR>', { desc = 'Find files', silent = true })
+vim.keymap.set('n', '<leader>fg', ':Telescope live_grep<CR>', { desc = 'Live grep', silent = true })
+vim.keymap.set('n', '<leader>fb', ':Telescope buffers<CR>', { desc = 'Buffers', silent = true })
+vim.keymap.set('n', '<leader>fh', ':Telescope help_tags<CR>', { desc = 'Help tags', silent = true })
+vim.keymap.set('n', '<leader>fr', ':Telescope oldfiles<CR>', { desc = 'Recent files', silent = true })
+vim.keymap.set('n', '<leader>fc', ':Telescope commands<CR>', { desc = 'Commands', silent = true })
+vim.keymap.set('n', '<leader>fs', ':Telescope resume<CR>', { desc = 'Resume last search', silent = true })
+vim.keymap.set('n', '<leader>sw', ':Telescope grep_string<CR>', { desc = 'Search word under cursor', silent = true })
 
 -- LSP 快捷鍵
 vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = '跳轉到定義' })
