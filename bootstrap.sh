@@ -59,15 +59,14 @@ fi
 
 # ============================
 #  Neovim config
-#  假設你有一個 ./nvim/ 資料夾放設定
-#  例如：./nvim/init.lua 或 ./nvim/lua/...
+#  強制覆蓋 init.lua
 # ============================
 mkdir -p "$HOME/.config/nvim"
-if [[ -d ./nvim ]]; then
-  cp -r ./init.lua* "$HOME/.config/nvim/"
-  echo "[INFO] Copied ./init.lua -> ~/.config/nvim/"
+if [[ -f ./init.lua ]]; then
+  cp -f ./init.lua "$HOME/.config/nvim/init.lua"
+  echo "[INFO] Copied (force overwrite) ./init.lua -> ~/.config/nvim/init.lua"
 else
-  echo "[WARN] ./nvim directory not found, skip copy"
+  echo "[WARN] ./init.lua not found, skip copy"
 fi
 
 # ============================

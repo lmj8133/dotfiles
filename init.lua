@@ -522,6 +522,7 @@ vim.keymap.set('n', '<leader>fb', ':Telescope buffers<CR>', { desc = '緩衝區�
 vim.keymap.set('n', '<leader>fh', ':Telescope help_tags<CR>', { desc = '幫助文件', silent = true })
 vim.keymap.set('n', '<leader>fr', ':Telescope oldfiles<CR>', { desc = '最近檔案', silent = true })
 vim.keymap.set('n', '<leader>fc', ':Telescope commands<CR>', { desc = '命令列表', silent = true })
+vim.keymap.set('n', '<leader>fs', ':Telescope grep_string<CR>', { desc = '搜尋游標下的字串', silent = true })
 
 -- LSP 快捷鍵
 vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = '跳轉到定義' })
