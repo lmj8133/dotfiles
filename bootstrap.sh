@@ -123,6 +123,7 @@ fi
 # 安裝 Node 22
 nvm install 22
 nvm use 22
+nvm alias default 22
 
 # 安裝 tree-sitter-cli
 npm install -g tree-sitter-cli
