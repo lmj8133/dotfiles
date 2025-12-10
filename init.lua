@@ -299,6 +299,9 @@ require("lazy").setup({
         lspconfig[server].setup({ capabilities = capabilities })
       end
 
+      -- Neovim 0.11+ requires explicit LSP enable
+      vim.lsp.enable({ "pyright", "lua_ls", "clangd", "rust_analyzer", "ts_ls", "marksman" })
+
       lspconfig.texlab.setup({
         capabilities = capabilities,
         settings = {

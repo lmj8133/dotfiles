@@ -70,6 +70,22 @@ else
 fi
 
 # ============================
+#  Custom scripts (bin/)
+# ============================
+mkdir -p "$HOME/.local/bin"
+if [[ -d ./bin ]]; then
+  for script in ./bin/*; do
+    if [[ -f "$script" ]]; then
+      cp "$script" "$HOME/.local/bin/"
+      chmod +x "$HOME/.local/bin/$(basename "$script")"
+      echo "[INFO] Copied $script -> ~/.local/bin/$(basename "$script")"
+    fi
+  done
+else
+  echo "[WARN] ./bin not found, skip"
+fi
+
+# ============================
 #  Zsh plugins
 # ============================
 PLUG_DIR="$HOME/.local/share/zsh-plugins"

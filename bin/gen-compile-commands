@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# gen-compile-commands - Generate compile_commands.json for C/C++ projects
+# Usage: gen-compile-commands [OPTIONS] [DIRECTORY]
+
+set -euo pipefail
+
+VERSION="1.0.0"
+VERBOSE=false
+COMPILER="clang"
+OUTPUT_FILE="compile_commands.json"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+usage() {
+    cat <<EOF
+Usage: gen-compile-commands [OPTIONS] [DIRECTORY]
+
+Generate compile_commands.json for clangd LSP support.
+
+Options:
+  -h, --help       Show this help message
+  -v, --verbose    Show detailed output
+  -c, --compiler   Specify compiler (default: clang)
+  -o, --output     Output file name (default: compile_commands.json)
+  --version        Show version
+
+Examples:
+  gen-compile-commands                 # Generate in current directory
+  gen-compile-commands /path/to/proj   # Generate for specific project
+  gen-compile-commands -v              # Verbose output
+EOF
+}
+
+log_info() {
+    if [[ "$VERBOSE" == true ]]; then
+        echo -e "${BLUE}[INFO]${NC} $1" >&2
+    fi
+}
+
+log_success() {
+    echo -e "${GREEN}[OK]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+# Build JSON arguments array from include flags
+build_arguments_json() {
+    local compiler="$1"
+    local file="$2"
+    shift 2
+    local include_dirs=("$@")
+
+    local args="\"${compiler}\", \"-c\""
+    for dir in "${include_dirs[@]}"; do
+        if [[ -n "$dir" ]]; then
+            args+=", \"-I${dir}\""
+        fi
+    done
+    args+=", \"${file}\""
+    echo "$args"
+}
+
+# Generate compile_commands.json
+generate_compile_commands() {
+    local project_dir="$1"
+    local output_path="${project_dir}/${OUTPUT_FILE}"
+    local -a include_dirs=()
+    local file_count=0
+    local first=true
+
+    # Resolve to absolute path
+    project_dir="$(cd "$project_dir" && pwd)"
+
+    log_info "Scanning directory: ${project_dir}"
+
+    # Find include directories
+    local patterns=("include" "inc" "src" "lib" "source" "headers")
+    for pattern in "${patterns[@]}"; do
+        if [[ -d "${project_dir}/${pattern}" ]]; then
+            include_dirs+=("${project_dir}/${pattern}")
+            log_info "Found include dir: ${pattern}/"
+        fi
+    done
+    include_dirs+=("${project_dir}")
+
+    # Find directories with .h files
+    while IFS= read -r dir; do
+        local already_added=false
+        for existing in "${include_dirs[@]}"; do
+            if [[ "$existing" == "$dir" ]]; then
+                already_added=true
+                break
+            fi
+        done
+        if [[ "$already_added" == false ]]; then
+            include_dirs+=("$dir")
+            log_info "Found header dir: ${dir#$project_dir/}/"
+        fi
+    done < <(find "$project_dir" -type f -name "*.h" -exec dirname {} \; 2>/dev/null | sort -u)
+
+    log_info "Include dirs: ${include_dirs[*]}"
+
+    # Start JSON array
+    echo "[" > "$output_path"
+
+    # Find all .c and .cpp files
+    while IFS= read -r -d '' file; do
+        local rel_file="${file#$project_dir/}"
+
+        if [[ "$first" == true ]]; then
+            first=false
+        else
+            echo "," >> "$output_path"
+        fi
+
+        local args_json
+        args_json=$(build_arguments_json "$COMPILER" "$file" "${include_dirs[@]}")
+
+        # Write JSON entry
+        cat >> "$output_path" <<EOF
+  {
+    "directory": "${project_dir}",
+    "file": "${file}",
+    "arguments": [${args_json}]
+  }
+EOF
+
+        ((file_count++)) || true
+        log_info "Added: ${rel_file}"
+    done < <(find "$project_dir" -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" \) -print0 2>/dev/null)
+
+    # Close JSON array
+    echo "]" >> "$output_path"
+
+    if [[ $file_count -eq 0 ]]; then
+        log_warn "No C/C++ source files found in ${project_dir}"
+        rm -f "$output_path"
+        return 1
+    fi
+
+    log_success "Generated ${OUTPUT_FILE} with ${file_count} file(s)"
+    log_success "Location: ${output_path}"
+}
+
+# Parse arguments
+PROJECT_DIR="."
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -c|--compiler)
+            COMPILER="$2"
+            shift 2
+            ;;
+        -o|--output)
+            OUTPUT_FILE="$2"
+            shift 2
+            ;;
+        --version)
+            echo "gen-compile-commands v${VERSION}"
+            exit 0
+            ;;
+        -*)
+            log_error "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+        *)
+            PROJECT_DIR="$1"
+            shift
+            ;;
+    esac
+done
+
+# Validate directory
+if [[ ! -d "$PROJECT_DIR" ]]; then
+    log_error "Directory not found: ${PROJECT_DIR}"
+    exit 1
+fi
+
+# Run
+generate_compile_commands "$PROJECT_DIR"
