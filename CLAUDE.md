@@ -6,6 +6,7 @@
 ## Important Notes
 
 * **DO NOT modify system dotfiles directly** (e.g., `~/.bashrc`, `~/.zshrc`, etc.)
+* **DO NOT read or modify files in `./claude/`** — this directory contains backup copies for bootstrap.sh, not active configurations
 * All operations should target the backup files within this repository
 * When the user asks about configurations, they mean the files stored here for version control and backup purposes
 * If the user wants to apply changes to their actual system dotfiles, they will explicitly state that

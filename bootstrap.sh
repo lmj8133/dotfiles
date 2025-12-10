@@ -94,6 +94,13 @@ else
 fi
 
 # ============================
+#  Claude Code config
+# ============================
+mkdir -p "$HOME/.claude"
+cp -r ./claude/* "$HOME/.claude/"
+echo "[INFO] Copied ./claude/* -> ~/.claude/"
+
+# ============================
 #  Zsh plugins
 # ============================
 PLUG_DIR="$HOME/.local/share/zsh-plugins"
