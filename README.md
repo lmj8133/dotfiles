@@ -41,6 +41,7 @@ cd /path/to/dotfiles
 - Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide, fzf, fd-find, ripgrep, gh
 - Copies `zprofile`, `zshrc` to `~/.zprofile`, `~/.zshrc`
 - Copies `init.lua` to `~/.config/nvim/init.lua`
+- Copies Claude Code configurations to `~/.claude/` (includes CLAUDE.md, commands, skills)
 - Clones Zsh plugins to `~/.local/share/zsh-plugins/`
 - Installs nvm + Node 22 + tree-sitter-cli
 - Installs uv (Python toolchain)
@@ -66,6 +67,10 @@ When you first start Zsh, Powerlevel10k will run the configuration wizard. Follo
 dotfiles/
 ├── bootstrap.sh         # Main bootstrap script (sets up entire dev environment)
 ├── uninstall.sh         # Uninstall script (removes all configs and plugins)
+├── claude/              # Claude Code configuration backups
+│   ├── CLAUDE.md        # Global Claude Code instructions
+│   ├── commands/        # Custom slash commands
+│   └── skills/          # Custom Claude Code skills
 ├── zprofile             # Zsh login-time environment (Homebrew, locale)
 ├── zshrc                # Zsh interactive config (plugins, aliases, keybindings)
 ├── init.lua             # Neovim configuration (LSP, plugins, keymaps)
