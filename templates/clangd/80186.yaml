@@ -1,0 +1,32 @@
+CompileFlags:
+  CompilationDatabase: .
+  Add:
+    # 8051/Keil embedded keywords - define as empty or basic types
+    - -Dfar=
+    - -Dnear=
+    - -Dcode=
+    - -Ddata=
+    - -Didata=
+    - -Dxdata=
+    - -Dpdata=
+    - -Dbdata=
+    - -Dbit=int
+    - -Dsfr=int
+    - -Dsbit=int
+    - -Dreentrant=
+    - -Dinterrupt(x)=
+    - -D__STATIC_FORCEINLINE=static
+    - -Du8=unsigned char
+    - -Du16=unsigned short
+    - -Du32=unsigned int
+    - -Ds8=signed char
+    - -Ds16=signed short
+    - -Ds32=signed int
+
+Index:
+  Background: Build
+  StandardLibrary: Yes
+
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict

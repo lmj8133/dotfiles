@@ -1,0 +1,393 @@
+#!/usr/bin/env bash
+# gen-cc - Smart compile_commands.json generator
+# Automatically detects project type and uses the best tool
+
+set -euo pipefail
+
+VERSION="1.2.0"
+VERBOSE=false
+PROJECT_ROOT=""
+CLANGD_TEMPLATE=""  # Optional manual template override
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+usage() {
+    cat <<EOF
+Usage: gen-cc [OPTIONS] [DIRECTORY]
+
+Automatically detect project type and generate compile_commands.json.
+
+Detection logic:
+  1. CMakeLists.txt found    → Use cmake
+  2. Makefile found          → Use bear
+  3. Otherwise               → Use gen-compile-commands
+
+Options:
+  -h, --help                 Show this help message
+  -v, --verbose              Show detailed output
+  --project-root DIR         Specify project root directory
+  --clangd-template TEMPLATE Use specific .clangd template (default: auto-detect)
+  --version                  Show version
+
+Examples:
+  gen-cc                 # Generate in current directory
+  gen-cc /path/to/proj   # Generate for specific project
+  gen-cc -v              # Verbose output
+
+Tools used:
+  - cmake: For CMake projects (cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON)
+  - bear:  For Makefile projects (bear -- make)
+  - gen-compile-commands: For projects without build systems
+
+Note: LSP environment setup (clangd config, symlinks, cache clearing) is always enabled.
+EOF
+}
+
+log_info() {
+    if [[ "$VERBOSE" == true ]]; then
+        echo -e "${BLUE}[INFO]${NC} $1" >&2
+    fi
+}
+
+log_success() {
+    echo -e "${GREEN}[OK]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+check_tool() {
+    local tool="$1"
+    if ! command -v "$tool" &> /dev/null; then
+        log_error "$tool is not installed"
+        return 1
+    fi
+    return 0
+}
+
+# Find project root directory (by looking for .git)
+find_project_root() {
+    local current_dir="$1"
+
+    # Strategy 1: Look for .git directory
+    while [[ "$current_dir" != "/" ]]; do
+        if [[ -d "$current_dir/.git" ]]; then
+            echo "$current_dir"
+            return 0
+        fi
+        current_dir=$(dirname "$current_dir")
+    done
+
+    # Strategy 2: Fallback to current directory
+    echo "$1"
+    return 0
+}
+
+# Auto-detect project type based on file patterns
+detect_project_type() {
+    local project_dir="$1"
+
+    # Detect 80186/8051/Keil projects (*.pdl files)
+    if find "$project_dir" -maxdepth 2 -name "*.pdl" -print -quit 2>/dev/null | grep -q .; then
+        echo "80186"
+        return 0
+    fi
+
+    # Future: Add more detection rules
+    # if [ -f "$project_dir/platformio.ini" ]; then echo "arduino"; return 0; fi
+    # if grep -q "STM32" "$project_dir/CMakeLists.txt" 2>/dev/null; then echo "stm32"; return 0; fi
+
+    # Default template
+    echo "default"
+    return 0
+}
+
+# Create .clangd configuration file with template support
+create_clangd_config() {
+    local project_root="$1"
+    local project_dir="$2"
+    local manual_template="$3"  # Optional manual template override
+    local clangd_config="${project_root}/.clangd"
+
+    # If already exists, skip
+    if [[ -f "$clangd_config" ]]; then
+        log_info ".clangd already exists, skipping"
+        return 0
+    fi
+
+    # Determine which template to use
+    local template
+    if [[ -n "$manual_template" ]]; then
+        # Manual template specified
+        template="$manual_template"
+        log_info "Using manually specified template: ${template}"
+    else
+        # Auto-detect project type
+        template=$(detect_project_type "$project_dir")
+        if [[ "$template" != "default" ]]; then
+            log_info "Auto-detected project type: ${template}"
+        fi
+    fi
+
+    local template_file="${HOME}/.config/gen-cc/templates/clangd/${template}.yaml"
+
+    # Try to use template file
+    if [[ -f "$template_file" ]]; then
+        log_info "Using .clangd template: ${template}"
+        cp "$template_file" "$clangd_config"
+        log_success "Created .clangd from template '${template}'"
+    else
+        # Fallback to built-in configuration
+        if [[ -n "$manual_template" ]]; then
+            log_warn "Template '${template}' not found at ${template_file}"
+        fi
+        log_info "Creating default .clangd configuration..."
+
+        cat > "$clangd_config" << 'EOF'
+CompileFlags:
+  CompilationDatabase: .
+
+Index:
+  Background: Build
+  StandardLibrary: Yes
+
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+EOF
+        log_success "Created .clangd at ${project_root}/.clangd"
+    fi
+}
+
+# Setup symlink from project root to compile_commands.json
+setup_symlink() {
+    local build_dir="$1"
+    local project_root="$2"
+    local compile_db="${build_dir}/compile_commands.json"
+    local root_link="${project_root}/compile_commands.json"
+
+    # If compile_commands.json already in project root, no symlink needed
+    if [[ "$(realpath "$build_dir")" == "$(realpath "$project_root")" ]]; then
+        log_info "compile_commands.json already in project root"
+        return 0
+    fi
+
+    # If symlink or file already exists in root, skip
+    if [[ -e "$root_link" ]]; then
+        log_info "compile_commands.json already exists in root"
+        return 0
+    fi
+
+    # Calculate relative path
+    local rel_path=$(realpath --relative-to="$project_root" "$compile_db")
+
+    log_info "Creating symlink: ${root_link} -> ${rel_path}"
+    ln -s "$rel_path" "$root_link"
+    log_success "Created symlink to compile_commands.json"
+}
+
+# Clear clangd cache
+clear_clangd_cache() {
+    local cache_dir="${HOME}/.cache/clangd"
+
+    if [[ -d "$cache_dir" ]]; then
+        log_info "Clearing clangd cache..."
+        rm -rf "$cache_dir"
+        log_success "Cleared clangd cache"
+    fi
+}
+
+# Setup complete LSP environment
+setup_lsp_environment() {
+    local build_dir="$1"          # compile_commands.json location
+    local project_root="$2"       # project root directory
+    local project_dir="$3"        # project directory for auto-detection
+
+    log_info "Setting up LSP environment..."
+
+    # 1. Create .clangd config (with auto-detection or manual template)
+    create_clangd_config "$project_root" "$project_dir" "$CLANGD_TEMPLATE"
+
+    # 2. Setup symlink if needed
+    setup_symlink "$build_dir" "$project_root"
+
+    # 3. Clear clangd cache
+    clear_clangd_cache
+
+    log_success "LSP environment setup complete"
+}
+
+generate_with_cmake() {
+    local project_dir="$1"
+
+    log_info "Detected CMake project (CMakeLists.txt found)"
+
+    if ! check_tool cmake; then
+        log_error "cmake is required for CMake projects"
+        log_error "Install with: sudo apt-get install cmake"
+        return 1
+    fi
+
+    log_info "Running: cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -B build"
+
+    if cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -B build; then
+        if [[ -f "build/compile_commands.json" ]]; then
+            cp build/compile_commands.json .
+            log_success "Generated compile_commands.json using cmake"
+            log_success "Location: ${project_dir}/compile_commands.json"
+            return 0
+        else
+            log_error "cmake succeeded but compile_commands.json not found"
+            return 1
+        fi
+    else
+        log_error "cmake failed"
+        return 1
+    fi
+}
+
+generate_with_bear() {
+    local project_dir="$1"
+
+    log_info "Detected Makefile project"
+
+    if ! check_tool bear; then
+        log_error "bear is not installed"
+        log_error "Install with: sudo apt-get install bear"
+        return 1
+    fi
+
+    if ! check_tool make; then
+        log_error "make is not installed"
+        log_error "Install with: sudo apt-get install build-essential"
+        return 1
+    fi
+
+    log_info "Running: bear -- make"
+
+    # Clean first to ensure all files are compiled
+    if make clean &> /dev/null; then
+        log_info "Cleaned previous build"
+    fi
+
+    if bear -- make; then
+        if [[ -f "compile_commands.json" ]]; then
+            log_success "Generated compile_commands.json using bear"
+            log_success "Location: ${project_dir}/compile_commands.json"
+            return 0
+        else
+            log_error "bear succeeded but compile_commands.json not found"
+            return 1
+        fi
+    else
+        log_error "bear -- make failed"
+        return 1
+    fi
+}
+
+generate_with_gen_compile_commands() {
+    local project_dir="$1"
+
+    log_info "No build system detected, using gen-compile-commands"
+
+    if ! check_tool gen-compile-commands; then
+        log_error "gen-compile-commands is not installed"
+        log_error "Make sure it's in your PATH"
+        return 1
+    fi
+
+    log_info "Running: gen-compile-commands"
+
+    if gen-compile-commands "$project_dir"; then
+        log_success "Generated compile_commands.json using gen-compile-commands"
+        return 0
+    else
+        log_error "gen-compile-commands failed"
+        return 1
+    fi
+}
+
+main() {
+    local project_dir="."
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            --project-root)
+                PROJECT_ROOT="$2"
+                shift 2
+                ;;
+            --clangd-template)
+                CLANGD_TEMPLATE="$2"
+                shift 2
+                ;;
+            --version)
+                echo "gen-cc v${VERSION}"
+                exit 0
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                usage
+                exit 1
+                ;;
+            *)
+                project_dir="$1"
+                shift
+                ;;
+        esac
+    done
+
+    # Validate directory
+    if [[ ! -d "$project_dir" ]]; then
+        log_error "Directory not found: ${project_dir}"
+        exit 1
+    fi
+
+    # Convert to absolute path
+    project_dir="$(cd "$project_dir" && pwd)"
+    cd "$project_dir"
+
+    log_info "Project directory: ${project_dir}"
+
+    # Detect project type and generate
+    local generation_result=0
+    if [[ -f "CMakeLists.txt" ]]; then
+        generate_with_cmake "$project_dir" || generation_result=$?
+    elif [[ -f "Makefile" ]] || [[ -f "makefile" ]] || [[ -f "GNUmakefile" ]]; then
+        generate_with_bear "$project_dir" || generation_result=$?
+    else
+        generate_with_gen_compile_commands "$project_dir" || generation_result=$?
+    fi
+
+    # If generation successful, setup LSP environment
+    if [[ $generation_result -eq 0 ]]; then
+        # Detect project root directory
+        if [[ -z "$PROJECT_ROOT" ]]; then
+            PROJECT_ROOT=$(find_project_root "$project_dir")
+        fi
+
+        setup_lsp_environment "$project_dir" "$PROJECT_ROOT" "$project_dir"
+    fi
+
+    exit $generation_result
+}
+
+main "$@"

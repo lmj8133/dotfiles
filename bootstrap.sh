@@ -28,7 +28,7 @@ echo "[INFO] Checking package installation status..."
 # Define all packages to install
 PACKAGES=(
   neovim curl wget git zsh build-essential libssl-dev
-  clangd locales zoxide fzf fd-find ripgrep gh tmux
+  clangd locales zoxide fzf fd-find ripgrep gh tmux bear
 )
 
 # Check which packages are already installed
@@ -121,6 +121,23 @@ if [[ -d ./bin ]]; then
   done
 else
   echo "[WARN] ./bin not found, skip"
+fi
+
+# ============================
+#  gen-cc templates
+# ============================
+TEMPLATE_DIR="$HOME/.config/gen-cc/templates/clangd"
+mkdir -p "$TEMPLATE_DIR"
+
+if [[ -d ./templates/clangd ]]; then
+  for template in ./templates/clangd/*.yaml; do
+    if [[ -f "$template" ]]; then
+      cp "$template" "$TEMPLATE_DIR/"
+      echo "[INFO] Copied $template -> $TEMPLATE_DIR/$(basename "$template")"
+    fi
+  done
+else
+  echo "[WARN] ./templates/clangd not found, skip template installation"
 fi
 
 # ============================

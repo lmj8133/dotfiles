@@ -593,6 +593,96 @@ require("lazy").setup({
   },
 })
 
+-- ==========================================
+-- Compile Commands Generation
+-- ==========================================
+
+-- Find project root directory by looking for markers
+local function find_project_root()
+  local markers = {
+    'compile_commands.json',
+    'CMakeLists.txt',
+    'Makefile',
+    '.git'
+  }
+
+  local current_file = vim.fn.expand('%:p')
+  local current_dir = vim.fn.fnamemodify(current_file, ':h')
+
+  -- Search upwards for markers
+  local function find_root(path)
+    for _, marker in ipairs(markers) do
+      if vim.fn.filereadable(path .. '/' .. marker) == 1 or
+         vim.fn.isdirectory(path .. '/' .. marker) == 1 then
+        return path
+      end
+    end
+
+    local parent = vim.fn.fnamemodify(path, ':h')
+    if parent == path then
+      return nil  -- Reached filesystem root
+    end
+    return find_root(parent)
+  end
+
+  return find_root(current_dir) or current_dir
+end
+
+-- Regenerate compile_commands.json and restart clangd
+local function regenerate_compile_commands()
+  local project_root = find_project_root()
+
+  -- Notify user
+  vim.notify('🔄 正在生成 compile_commands.json...', vim.log.levels.INFO)
+
+  -- Execute gen-cc asynchronously
+  vim.fn.jobstart({ 'gen-cc' }, {
+    cwd = project_root,
+    stdout_buffered = true,
+    stderr_buffered = true,
+
+    on_stderr = function(_, data)
+      if data and #data > 0 then
+        local err_msg = table.concat(data, '\n')
+        vim.schedule(function()
+          vim.notify('⚠️ gen-cc 警告:\n' .. err_msg, vim.log.levels.WARN)
+        end)
+      end
+    end,
+
+    on_exit = function(_, code)
+      vim.schedule(function()
+        if code == 0 then
+          -- Success: restart clangd
+          local clients = vim.lsp.get_active_clients({
+            bufnr = vim.api.nvim_get_current_buf(),
+            name = 'clangd'
+          })
+
+          if #clients > 0 then
+            for _, client in ipairs(clients) do
+              vim.lsp.stop_client(client.id)
+            end
+
+            vim.defer_fn(function()
+              vim.cmd('LspStart clangd')
+              vim.notify('✅ compile_commands.json 已更新，clangd 已重載', vim.log.levels.INFO)
+            end, 500)
+          else
+            vim.notify('✅ compile_commands.json 已更新', vim.log.levels.INFO)
+          end
+        else
+          vim.notify('❌ gen-cc 執行失敗 (exit code: ' .. code .. ')', vim.log.levels.ERROR)
+        end
+      end)
+    end
+  })
+end
+
+-- Register user command
+vim.api.nvim_create_user_command('GenCC', regenerate_compile_commands,
+  { desc = '重新生成 compile_commands.json 並重載 clangd' })
+
 -- ========================================
 -- 自訂快捷鍵映射
 -- ========================================
@@ -627,6 +717,7 @@ vim.keymap.set('n', '<leader>f', function() vim.lsp.buf.format { async = true } 
 vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, { desc = '顯示診斷詳情' })
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, { desc = '上一個診斷' })
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next, { desc = '下一個診斷' })
+vim.keymap.set('n', '<leader>cc', regenerate_compile_commands, { desc = '重新生成 compile_commands.json 並重載 clangd', silent = true })
 
 -- 視窗導航
 vim.keymap.set('n', '<C-h>', '<C-w>h', { desc = '移到左邊視窗' })
