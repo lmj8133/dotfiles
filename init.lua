@@ -447,7 +447,91 @@ require("lazy").setup({
   { 'numToStr/Comment.nvim', config = true },
   { 'windwp/nvim-autopairs', config = true },
   { 'folke/which-key.nvim', config = true },
-  { "simrat39/symbols-outline.nvim", config = true },
+  -- Aerial (Code outline sidebar with Treesitter support)
+  {
+    "stevearc/aerial.nvim",
+    dependencies = {
+      "nvim-treesitter/nvim-treesitter",
+      "nvim-tree/nvim-web-devicons"
+    },
+    config = function()
+      require("aerial").setup({
+        -- Priority: Use Treesitter first, fallback to LSP
+        backends = { "treesitter", "lsp", "markdown", "man" },
+
+        -- Layout
+        layout = {
+          max_width = { 30, 0.2 },
+          width = 30,
+          min_width = 20,
+          default_direction = "right",  -- 右側顯示
+          placement = "edge",
+        },
+
+        -- Appearance
+        show_guides = true,  -- 顯示樹狀引導線
+        guides = {
+          mid_item = "├─",
+          last_item = "└─",
+          nested_top = "│ ",
+          whitespace = "  ",
+        },
+
+        -- Behavior
+        close_on_select = false,  -- 跳轉後不自動關閉
+        highlight_on_hover = true,
+        autojump = false,
+
+        -- Folding
+        fold_markers = { "", "" },
+        post_jump_cmd = "normal! zz",  -- 跳轉後居中顯示
+
+        -- Treesitter settings
+        treesitter = {
+          update_delay = 300,  -- 更新延遲（毫秒）
+        },
+
+        -- Filter symbols (show all by default)
+        filter_kind = false,
+
+        -- Keymaps (within aerial window)
+        keymaps = {
+          ["?"] = "actions.show_help",
+          ["g?"] = "actions.show_help",
+          ["<CR>"] = "actions.jump",
+          ["<2-LeftMouse>"] = "actions.jump",
+          ["<C-v>"] = "actions.jump_vsplit",
+          ["<C-s>"] = "actions.jump_split",
+          ["p"] = "actions.scroll",
+          ["<C-j>"] = "actions.down_and_scroll",
+          ["<C-k>"] = "actions.up_and_scroll",
+          ["{"] = "actions.prev",
+          ["}"] = "actions.next",
+          ["[["] = "actions.prev_up",
+          ["]]"] = "actions.next_up",
+          ["q"] = "actions.close",
+          ["o"] = "actions.tree_toggle",
+          ["za"] = "actions.tree_toggle",
+          ["O"] = "actions.tree_toggle_recursive",
+          ["zA"] = "actions.tree_toggle_recursive",
+          ["l"] = "actions.tree_open",
+          ["zo"] = "actions.tree_open",
+          ["L"] = "actions.tree_open_recursive",
+          ["zO"] = "actions.tree_open_recursive",
+          ["h"] = "actions.tree_close",
+          ["zc"] = "actions.tree_close",
+          ["H"] = "actions.tree_close_recursive",
+          ["zC"] = "actions.tree_close_recursive",
+          ["zr"] = "actions.tree_increase_fold_level",
+          ["zR"] = "actions.tree_open_all",
+          ["zm"] = "actions.tree_decrease_fold_level",
+          ["zM"] = "actions.tree_close_all",
+          ["zx"] = "actions.tree_sync_folds",
+          ["zX"] = "actions.tree_sync_folds",
+        },
+      })
+    end
+  },
 
   -- Markdown 預覽（非 lazy，保證命令與按鍵存在）
   {
@@ -524,6 +608,9 @@ vim.keymap.set('n', '<leader>fr', ':Telescope oldfiles<CR>', { desc = 'Recent fi
 vim.keymap.set('n', '<leader>fc', ':Telescope commands<CR>', { desc = 'Commands', silent = true })
 vim.keymap.set('n', '<leader>fs', ':Telescope resume<CR>', { desc = 'Resume last search', silent = true })
 vim.keymap.set('n', '<leader>sw', ':Telescope grep_string<CR>', { desc = 'Search word under cursor', silent = true })
+
+-- Aerial (Code Outline)
+vim.keymap.set('n', '<leader>fo', ':AerialToggle<CR>', { desc = 'Toggle code outline (aerial)', silent = true })
 
 -- LSP 快捷鍵
 vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = '跳轉到定義' })
