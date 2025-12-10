@@ -13,32 +13,62 @@ fi
 echo "[INFO] Using SUDO='${SUDO}'"
 
 # ============================
+#  Helper functions
+# ============================
+check_package() {
+  dpkg -l "$1" 2>/dev/null | grep -q "^ii  $1 "
+}
+
+# ============================
 #  APT: Neovim / Zsh / tools
 # ============================
 # 有些系統 add-apt-repository 不一定有，要先裝 software-properties-common
-$SUDO apt-get update
-$SUDO apt-get install -y software-properties-common
+echo "[INFO] Checking package installation status..."
 
-$SUDO add-apt-repository -y ppa:neovim-ppa/unstable
-$SUDO apt-get update
+# Define all packages to install
+PACKAGES=(
+  neovim curl wget git zsh build-essential libssl-dev
+  clangd locales zoxide fzf fd-find ripgrep gh tmux
+)
 
-# 一次裝完你列出的套件
-$SUDO apt-get install -y \
-  neovim \
-  curl \
-  wget \
-  git \
-  zsh \
-  build-essential \
-  libssl-dev \
-  clangd \
-  locales \
-  zoxide \
-  fzf \
-  fd-find \
-  ripgrep \
-  gh \
-  tmux
+# Check which packages are already installed
+PACKAGES_TO_INSTALL=()
+PACKAGES_ALREADY_INSTALLED=()
+
+for pkg in "${PACKAGES[@]}"; do
+  if check_package "$pkg"; then
+    PACKAGES_ALREADY_INSTALLED+=("$pkg")
+  else
+    PACKAGES_TO_INSTALL+=("$pkg")
+  fi
+done
+
+# Report status
+if [[ ${#PACKAGES_ALREADY_INSTALLED[@]} -gt 0 ]]; then
+  echo "[INFO] Already installed (${#PACKAGES_ALREADY_INSTALLED[@]}): ${PACKAGES_ALREADY_INSTALLED[*]}"
+fi
+
+if [[ ${#PACKAGES_TO_INSTALL[@]} -eq 0 ]]; then
+  echo "[INFO] All packages already installed, skipping apt-get install"
+else
+  echo "[INFO] Need to install (${#PACKAGES_TO_INSTALL[@]}): ${PACKAGES_TO_INSTALL[*]}"
+
+  # Install software-properties-common if needed
+  if ! check_package "software-properties-common"; then
+    $SUDO apt-get update
+    $SUDO apt-get install -y software-properties-common
+  fi
+
+  # Add Neovim PPA if neovim needs to be installed
+  if [[ " ${PACKAGES_TO_INSTALL[*]} " =~ " neovim " ]]; then
+    echo "[INFO] Adding Neovim PPA..."
+    $SUDO add-apt-repository -y ppa:neovim-ppa/unstable
+  fi
+
+  $SUDO apt-get update
+  $SUDO apt-get install -y "${PACKAGES_TO_INSTALL[@]}"
+  echo "[INFO] Package installation completed"
+fi
 
 # ============================
 #  Copy zprofile / zshrc
@@ -151,12 +181,31 @@ else
 fi
 
 # 安裝 Node 22
-nvm install 22
-nvm use 22
-nvm alias default 22
+# Check if Node 22 is already installed
+if nvm ls 22 &>/dev/null; then
+  echo "[INFO] Node 22 already installed"
+  nvm use 22
+else
+  echo "[INFO] Installing Node 22..."
+  nvm install 22
+fi
+
+# Check if Node 22 is already the default version
+current_default=$(nvm version default 2>/dev/null)
+if [[ "$current_default" == v22* ]]; then
+  echo "[INFO] Node 22 already set as default"
+else
+  echo "[INFO] Setting Node 22 as default..."
+  nvm alias default 22
+fi
 
 # 安裝 tree-sitter-cli
-npm install -g tree-sitter-cli
+if command -v tree-sitter &>/dev/null; then
+  echo "[INFO] tree-sitter-cli already installed: $(tree-sitter --version 2>/dev/null || echo 'version unknown')"
+else
+  echo "[INFO] Installing tree-sitter-cli..."
+  npm install -g tree-sitter-cli
+fi
 
 # ============================
 #  UV (Python toolchain)
