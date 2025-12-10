@@ -104,6 +104,14 @@ require("lazy").setup({
     config = function()
       require('lualine').setup({
         options = { theme = 'gruvbox', section_separators = '', component_separators = '' },
+        sections = {
+          lualine_c = {
+            {
+              'filename',
+              path = 1,  -- 0 = 僅檔名, 1 = 相對路徑, 2 = 絕對路徑, 3 = 絕對路徑(~)
+            }
+          }
+        }
       })
     end
   },
