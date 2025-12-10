@@ -37,7 +37,8 @@ $SUDO apt-get install -y \
   fzf \
   fd-find \
   ripgrep \
-  gh
+  gh \
+  tmux
 
 # ============================
 #  Copy zprofile / zshrc
@@ -55,6 +56,13 @@ if [[ -f ./zshrc ]]; then
   echo "[INFO] Copied ./zshrc -> ~/.zshrc"
 else
   echo "[WARN] ./zshrc not found, skip"
+fi
+
+if [[ -f ./tmux.conf ]]; then
+  cp ./tmux.conf "$HOME/.tmux.conf"
+  echo "[INFO] Copied ./tmux.conf -> ~/.tmux.conf"
+else
+  echo "[WARN] ./tmux.conf not found, skip"
 fi
 
 # ============================
