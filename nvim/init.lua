@@ -1029,4 +1029,9 @@ vim.api.nvim_create_autocmd("FileType", {
 print("Neovim 配置載入完成！")
 print("✅ Telescope 跳轉已啟用：<leader>jd/jc/js/jr 或直接用 gd")
 
-
+-- ========================================
+-- Local overrides (optional)
+-- ========================================
+-- Load lua/local.lua if it exists, for machine-specific customization
+-- Create ~/.config/nvim/lua/local.lua to override settings above
+pcall(require, 'local')

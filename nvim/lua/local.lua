@@ -1,0 +1,28 @@
+-- ========================================
+-- Local Overrides (machine-specific)
+-- ========================================
+-- This file is loaded AFTER init.lua, allowing you to override any settings
+-- without modifying init.lua directly.
+--
+-- ----------------------------------------
+-- Option overrides
+-- ----------------------------------------
+--   vim.opt.tabstop = 2
+--   vim.opt.shiftwidth = 2
+--   vim.opt.colorcolumn = "100"
+--
+-- ----------------------------------------
+-- Plugin toggles
+-- ----------------------------------------
+--   vim.g.copilot_enabled = false
+--
+-- ----------------------------------------
+-- Theme overrides
+-- ----------------------------------------
+--   vim.cmd.colorscheme "tokyonight"
+--
+-- ----------------------------------------
+-- Keymap overrides
+-- ----------------------------------------
+-- Keymaps defined here will override those in init.lua.
+--   vim.keymap.set('n', '<leader>oo', '<cmd>Outline<CR>', { desc = 'Toggle code outline' })

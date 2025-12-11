@@ -71,40 +71,32 @@ else
 fi
 
 # ============================
-#  Copy zprofile / zshrc
-#  (假設目前工作目錄有 ./zprofile ./zshrc)
+#  Zsh config
 # ============================
-if [[ -f ./zprofile ]]; then
-  cp ./zprofile "$HOME/.zprofile"
-  echo "[INFO] Copied ./zprofile -> ~/.zprofile"
+if [[ -d ./zsh ]]; then
+  [[ -f ./zsh/zprofile ]] && cp ./zsh/zprofile "$HOME/.zprofile" && echo "[INFO] Copied zsh/zprofile -> ~/.zprofile"
+  [[ -f ./zsh/zshrc ]] && cp ./zsh/zshrc "$HOME/.zshrc" && echo "[INFO] Copied zsh/zshrc -> ~/.zshrc"
 else
-  echo "[WARN] ./zprofile not found, skip"
+  echo "[WARN] ./zsh not found, skip"
 fi
 
-if [[ -f ./zshrc ]]; then
-  cp ./zshrc "$HOME/.zshrc"
-  echo "[INFO] Copied ./zshrc -> ~/.zshrc"
-else
-  echo "[WARN] ./zshrc not found, skip"
-fi
-
-if [[ -f ./tmux.conf ]]; then
-  cp ./tmux.conf "$HOME/.tmux.conf"
-  echo "[INFO] Copied ./tmux.conf -> ~/.tmux.conf"
-else
-  echo "[WARN] ./tmux.conf not found, skip"
+# ============================
+#  Tmux config
+# ============================
+if [[ -f ./tmux/tmux.conf ]]; then
+  cp ./tmux/tmux.conf "$HOME/.tmux.conf"
+  echo "[INFO] Copied tmux/tmux.conf -> ~/.tmux.conf"
 fi
 
 # ============================
 #  Neovim config
-#  強制覆蓋 init.lua
 # ============================
-mkdir -p "$HOME/.config/nvim"
-if [[ -f ./init.lua ]]; then
-  cp -f ./init.lua "$HOME/.config/nvim/init.lua"
-  echo "[INFO] Copied (force overwrite) ./init.lua -> ~/.config/nvim/init.lua"
+if [[ -d ./nvim ]]; then
+  mkdir -p "$HOME/.config/nvim"
+  cp -rf ./nvim/* "$HOME/.config/nvim/"
+  echo "[INFO] Copied ./nvim/* -> ~/.config/nvim/"
 else
-  echo "[WARN] ./init.lua not found, skip copy"
+  echo "[WARN] ./nvim not found, skip"
 fi
 
 # ============================
