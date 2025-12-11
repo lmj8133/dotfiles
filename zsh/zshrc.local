@@ -1,0 +1,6 @@
+# ~/.zshrc.local - Local overrides (not tracked in git)
+# Copy this file to ~/.zshrc.local and uncomment settings as needed.
+
+########## Disable Vi mode ##########
+# Uncomment the following line to switch back to emacs mode:
+# bindkey -e

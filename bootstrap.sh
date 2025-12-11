@@ -76,6 +76,11 @@ fi
 if [[ -d ./zsh ]]; then
   [[ -f ./zsh/zprofile ]] && cp ./zsh/zprofile "$HOME/.zprofile" && echo "[INFO] Copied zsh/zprofile -> ~/.zprofile"
   [[ -f ./zsh/zshrc ]] && cp ./zsh/zshrc "$HOME/.zshrc" && echo "[INFO] Copied zsh/zshrc -> ~/.zshrc"
+  # Only copy zshrc.local if it doesn't exist (preserve user customizations)
+  if [[ -f ./zsh/zshrc.local && ! -f "$HOME/.zshrc.local" ]]; then
+    cp ./zsh/zshrc.local "$HOME/.zshrc.local"
+    echo "[INFO] Copied zsh/zshrc.local -> ~/.zshrc.local"
+  fi
 else
   echo "[WARN] ./zsh not found, skip"
 fi
@@ -93,7 +98,19 @@ fi
 # ============================
 if [[ -d ./nvim ]]; then
   mkdir -p "$HOME/.config/nvim"
+  # Preserve user's local.lua if it exists
+  LOCAL_LUA="$HOME/.config/nvim/lua/local.lua"
+  if [[ -f "$LOCAL_LUA" ]]; then
+    LOCAL_LUA_BACKUP=$(mktemp)
+    cp "$LOCAL_LUA" "$LOCAL_LUA_BACKUP"
+  fi
   cp -rf ./nvim/* "$HOME/.config/nvim/"
+  # Restore user's local.lua
+  if [[ -n "${LOCAL_LUA_BACKUP:-}" && -f "$LOCAL_LUA_BACKUP" ]]; then
+    cp "$LOCAL_LUA_BACKUP" "$LOCAL_LUA"
+    rm "$LOCAL_LUA_BACKUP"
+    echo "[INFO] Preserved user's lua/local.lua"
+  fi
   echo "[INFO] Copied ./nvim/* -> ~/.config/nvim/"
 else
   echo "[WARN] ./nvim not found, skip"
