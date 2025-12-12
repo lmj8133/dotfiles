@@ -108,43 +108,213 @@ The included `init.lua` provides a professional IDE-like setup:
 - **Git Integration**: gitsigns, fugitive, flog
 - **Treesitter**: Syntax highlighting and code intelligence
 
-### Quick Reference
+### Keybindings Reference
 
-#### Essential Keybindings
+> **Tip**: Press `<leader>?` in Neovim to see all keybindings via which-key popup.
+
+<details>
+<summary><b>🔑 Core Keybindings (Click to expand)</b></summary>
+
 | Key | Action |
 |-----|--------|
-| `<leader>` | Space key (leader) |
+| `<Space>` | Leader key |
 | `<leader>e` | Toggle file tree (nvim-tree) |
 | `<leader>ff` | Find files |
 | `<leader>fg` | Live grep (search in files) |
-| `<leader>fb` | Buffer list |
-| `<leader>w` | Save file |
-| `<leader>q` | Quit |
-
-#### LSP Navigation
-| Key | Action |
-|-----|--------|
 | `gd` | Go to definition |
 | `gr` | Show references |
 | `K` | Hover documentation |
-| `<leader>rn` | Rename symbol |
-| `<leader>ca` | Code actions |
-| `[d` / `]d` | Previous/next diagnostic |
+| `<leader>?` | Show all keybindings |
 
-#### Markdown Tools
+</details>
+
+<details>
+<summary><b>📁 File & Buffer Operations</b></summary>
+
 | Key | Action |
 |-----|--------|
-| `<leader>mp` | Markdown preview toggle |
-| `<leader>mP` | Export to PDF (Pandoc + XeLaTeX) |
-| `<leader>mt` | Insert table template |
-| `<leader>mc` | Insert code block |
+| `<leader>e` | Toggle file tree |
+| `<leader>ff` | Find files |
+| `<leader>fb` | Switch buffer |
+| `<leader>fr` | Recent files |
+| `<leader>fg` | Live grep |
+| `<leader>fh` | Search help tags |
+| `<leader>fc` | Search commands |
+| `<leader>fs` | Resume last search |
+| `<leader>sw` | Search word under cursor |
 
-#### LaTeX Tools (VimTeX + Skim)
+</details>
+
+<details>
+<summary><b>🧭 Navigation</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `<C-h>` | Move to left window |
+| `<C-l>` | Move to right window |
+| `<C-j>` | Move to window below |
+| `<C-k>` | Move to window above |
+| `<leader>sv` | Vertical split |
+| `<leader>sh` | Horizontal split |
+| `<C-d>` | Scroll down (Neoscroll) |
+| `<C-u>` | Scroll up (Neoscroll) |
+
+</details>
+
+<details>
+<summary><b>🔧 LSP Functions</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `gd` | Go to definition |
+| `gD` | Go to declaration |
+| `gr` | Show references |
+| `gi` | Go to implementation |
+| `K` | Show hover documentation |
+| `<leader>rn` | Rename symbol |
+| `<leader>ca` | Code actions |
+| `<leader>f` | Format code |
+| `<leader>d` | Show diagnostic details |
+| `[d` | Previous diagnostic |
+| `]d` | Next diagnostic |
+| `<leader>cc` | Regenerate compile_commands.json (C/C++) |
+
+</details>
+
+<details>
+<summary><b>🌿 Git (Gitsigns)</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `]c` | Next change |
+| `[c` | Previous change |
+| `<leader>hs` | Stage hunk |
+| `<leader>hr` | Reset hunk |
+| `<leader>hS` | Stage entire file |
+| `<leader>hR` | Reset entire file |
+| `<leader>hu` | Undo stage hunk |
+| `<leader>hp` | Preview hunk |
+| `<leader>hb` | Show line blame |
+| `<leader>hd` | Show diff |
+| `<leader>hD` | Show diff (vs previous version) |
+
+</details>
+
+<details>
+<summary><b>📝 Markdown</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `<leader>mp` | Toggle preview |
+| `<leader>ms` | Stop preview |
+| `<leader>mt` | Insert table |
+| `<leader>ml` | Insert link |
+| `<leader>mi` | Insert image |
+| `<leader>mc` | Insert code block |
+| `<leader>mb` | Bold text |
+| `<leader>m*` | Italic text |
+| `<leader>mP` | Export to PDF (Pandoc) |
+
+</details>
+
+<details>
+<summary><b>📚 LaTeX (VimTeX)</b></summary>
+
 | Key | Action |
 |-----|--------|
 | `<leader>ll` | Compile LaTeX |
-| `<leader>lv` | View PDF in Skim |
+| `<leader>lv` | View PDF |
 | `<leader>lc` | Clean auxiliary files |
+| `<leader>lC` | Full clean |
+| `<leader>le` | View errors |
+| `<leader>lt` | Open TOC |
+| `<leader>lT` | Toggle TOC |
+| `<leader>lk` | Stop compilation |
+| `<leader>lK` | Stop all compilations |
+| `<leader>li` | LaTeX info |
+| `<leader>ls` | Toggle main file |
+| `ie` / `ae` | Select environment content/environment |
+| `i$` / `a$` | Select math mode |
+
+</details>
+
+<details>
+<summary><b>🍎 Swift LSP</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `<leader>ls` | Swift LSP status |
+| `<leader>lr` | Swift LSP restart |
+| `<leader>ll` | Swift LSP log |
+| `<leader>jd` | Jump to function definition |
+| `<leader>jc` | Jump to class definition |
+| `<leader>js` | Jump to struct definition |
+| `<leader>jr` | Find all references |
+
+</details>
+
+<details>
+<summary><b>✨ Completion (Insert Mode)</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `<C-Space>` | Trigger completion |
+| `<CR>` | Confirm completion |
+| `<Tab>` | Next item / Expand snippet |
+| `<S-Tab>` | Previous item / Jump back in snippet |
+| `<C-e>` | Abort completion |
+| `<C-b>` | Scroll docs up |
+| `<C-f>` | Scroll docs down |
+
+</details>
+
+<details>
+<summary><b>🤖 AI Assistant</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `<C-J>` | Accept Copilot suggestion |
+
+</details>
+
+<details>
+<summary><b>📂 NvimTree (inside tree)</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `t` | Open in new tab |
+| `s` | Open in horizontal split |
+| `v` | Open in vertical split |
+
+</details>
+
+<details>
+<summary><b>📋 Outline (inside outline)</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `?` | Show help |
+| `<Esc>` / `q` | Close |
+| `<CR>` | Jump to location |
+| `o` | Preview location |
+| `K` | Hover symbol |
+| `r` | Rename symbol |
+| `a` | Code action |
+| `h` / `l` | Fold / Unfold |
+| `zM` / `zR` | Fold all / Unfold all |
+
+</details>
+
+<details>
+<summary><b>🔭 Telescope (inside picker)</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `<C-d>` | Preview scroll down |
+| `<C-u>` | Preview scroll up |
+| `dd` | Delete buffer (in buffers picker) |
+
+</details>
 
 ---
 

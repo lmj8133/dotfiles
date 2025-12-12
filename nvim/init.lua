@@ -281,14 +281,8 @@ require("lazy").setup({
             print("   ⚠️  definitionProvider disabled")
           end
 
-          -- 設定 buffer 專屬的 LSP 快捷鍵
-          -- 注意：gd 由後面的 FileType autocmd 設定為智能切換版本
-          local bufopts = { noremap=true, silent=true, buffer=bufnr }
-          vim.keymap.set('n', 'K', vim.lsp.buf.hover, bufopts)
-          vim.keymap.set('n', 'gr', vim.lsp.buf.references, bufopts)
-          vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, bufopts)
-          vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, bufopts)
-          vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, bufopts)
+          -- LSP 快捷鍵統一使用全局定義（見下方「自訂快捷鍵映射」區塊）
+          -- gd 由後面的 FileType autocmd 設定為智能切換版本
         end,
         on_init = function(client)
           print("🚀 SourceKit LSP initializing...")
@@ -656,8 +650,6 @@ vim.api.nvim_create_user_command('GenCC', regenerate_compile_commands,
 -- ========================================
 
 -- 基礎快捷鍵
-vim.keymap.set('n', '<leader>w', ':w<CR>', { desc = '儲存檔案', silent = true })
-vim.keymap.set('n', '<leader>q', ':q<CR>', { desc = '退出', silent = true })
 vim.keymap.set('n', '<leader>e', ':NvimTreeToggle<CR>', { desc = '切換檔案樹', silent = true })
 
 -- Telescope shortcuts
@@ -689,13 +681,6 @@ vim.keymap.set('n', '<C-h>', '<C-w>h', { desc = '移到左邊視窗' })
 vim.keymap.set('n', '<C-l>', '<C-w>l', { desc = '移到右邊視窗' })
 vim.keymap.set('n', '<C-j>', '<C-w>j', { desc = '移到下方視窗' })
 vim.keymap.set('n', '<C-k>', '<C-w>k', { desc = '移到上方視窗' })
-
--- 快速移動
-vim.keymap.set('n', '<leader>h', '^', { desc = '移到行首（非空白）' })
-vim.keymap.set('n', '<leader>l', '$', { desc = '移到行尾' })
-
--- 清除搜尋高亮
-vim.keymap.set('n', '<leader>nh', ':noh<CR>', { desc = '清除搜尋高亮', silent = true })
 
 -- 分割視窗
 vim.keymap.set('n', '<leader>sv', ':vsplit<CR>', { desc = '垂直分割', silent = true })
