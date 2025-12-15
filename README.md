@@ -129,6 +129,217 @@ The included `init.lua` provides a professional IDE-like setup:
 > **Tip**: Press `<leader>?` in Neovim to see all keybindings via which-key popup.
 
 <details>
+<summary><b>🎯 Vim/Neovim Basic Operations (Beginner's Guide)</b></summary>
+
+**A. Modes**
+
+| Key | Action |
+|-----|--------|
+| `i` | Insert before cursor |
+| `a` | Insert after cursor |
+| `I` | Insert at beginning of line |
+| `A` | Insert at end of line |
+| `o` | Open line below and insert |
+| `O` | Open line above and insert |
+| `v` | Enter visual mode (character-wise) |
+| `V` | Enter visual mode (line-wise) |
+| `<C-v>` | Enter visual mode (block-wise) |
+| `:` | Enter command mode |
+| `<Esc>` | Return to normal mode |
+
+**B. Movement**
+
+| Key | Action |
+|-----|--------|
+| `h` | Move left |
+| `j` | Move down |
+| `{number}j` | Move down to line N |
+| `k` | Move up |
+| `{number}k` | Move up to line N |
+| `l` | Move right |
+| `w` | Move to start of next word |
+| `b` | Move to start of previous word |
+| `e` | Move to end of word |
+| `ge` | Move to end of previous word |
+| `0` | Move to start of line |
+| `^` | Move to first non-blank character |
+| `$` | Move to end of line |
+| `gg` | Move to start of file |
+| `G` | Move to end of file |
+| `:{number}` | Move to line N |
+| `%` | Jump to matching bracket |
+| `{` | Move to previous paragraph/block |
+| `}` | Move to next paragraph/block |
+| `H` | Move to top of screen |
+| `M` | Move to middle of screen |
+| `L` | Move to bottom of screen |
+| `Ctrl + f` | Page down |
+| `Ctrl + b` | Page up |
+| `zz` | Center cursor line on screen |
+| `zt` | Move cursor line to top of screen |
+| `zb` | Move cursor line to bottom of screen |
+| `m{register}` | Set mark at cursor (e.g., `ma`) |
+| `'{register}` | Jump to mark (e.g., `'a`) |
+
+**C. Editing**
+
+| Key | Action |
+|-----|--------|
+| `x` | Delete character under cursor |
+| `X` | Delete character before cursor |
+| `dd` | Delete entire line |
+| `{number}dd` | Delete N lines |
+| `D` | Delete to end of line |
+| `d{motion}` | Delete motion range |
+| `r` | Replace single character |
+| `s` | Substitute character |
+| `S` | Substitute entire line |
+| `cc` | Change entire line |
+| `C` | Change to end of line |
+| `c{motion}` | Change motion range |
+| `yy` | Yank/copy entire line |
+| `{number}yy` | Yank/copy N lines |
+| `Y` | Yank/copy entire line (same as yy) |
+| `p` | Paste after cursor |
+| `P` | Paste before cursor |
+| `u` | Undo |
+| `<C-r>` | Redo |
+| `J` | Join line below |
+| `.` | Repeat last change |
+
+**D. Save & Quit**
+
+| Command | Action |
+|---------|--------|
+| `:w` | Save file |
+| `:wa` | Save all files |
+| `:q` | Quit |
+| `:qa` | Quit all |
+| `:wq` | Save and quit |
+| `ZZ` | Save and quit |
+| `:q!` | Force quit without saving |
+| `ZQ` | Force quit without saving |
+
+**E. Search & Replace**
+
+| Command | Action |
+|---------|--------|
+| `/pattern` | Search forward |
+| `?pattern` | Search backward |
+| `n` | Next match |
+| `N` | Previous match |
+| `*` | Search current word forward |
+| `#` | Search current word backward |
+| `:s/old/new/` | Replace first in line |
+| `:s/old/new/g` | Replace all in line |
+| `:%s/old/new/g` | Replace all in file |
+| `:%s/old/new/gc` | Replace all with confirm |
+| `:noh` | Clear search highlight |
+
+**F. Visual Mode**
+
+| Key | Action |
+|-----|--------|
+| `v` | Character-wise visual mode |
+| `V` | Line-wise visual mode |
+| `<C-v>` | Block-wise visual mode |
+| `d` | Delete selection |
+| `y` | Yank/copy selection |
+| `c` | Change selection |
+| `>` | Indent right |
+| `{number}>` | Indent right N times |
+| `<` | Indent left |
+| `{number}<` | Indent left N times |
+| `~` | Toggle case |
+
+**G. Text Objects**
+
+| Key | Action |
+|-----|--------|
+| `iw` | Inner word |
+| `aw` | A word |
+| `i"` | Inner double quotes |
+| `a"` | A pair of double quotes |
+| `i'` | Inner single quotes |
+| `a'` | A pair of single quotes |
+| `i(` / `i)` / `ib` | Inner parentheses |
+| `a(` / `a)` / `ab` | A pair of parentheses |
+| `i{` / `i}` / `iB` | Inner braces |
+| `a{` / `a}` / `aB` | A pair of braces |
+| `i[` / `i]` | Inner brackets |
+| `a[` / `a]` | A pair of brackets |
+| `it` | Inner tag |
+| `at` | A pair of tags |
+| `ip` | Inner paragraph |
+| `ap` | A paragraph |
+
+**H. Window Management**
+
+| Key | Action |
+|-----|--------|
+| `:sp` | Horizontal split |
+| `:vsp` | Vertical split |
+| `<leader>sh` | Horizontal split |
+| `<leader>sv` | Vertical split |
+| `<C-w>h` / `<C-h>` | Move to left window |
+| `<C-w>j` / `<C-j>` | Move to window below |
+| `<C-w>k` / `<C-k>` | Move to window above |
+| `<C-w>l` / `<C-l>` | Move to right window |
+| `<C-w>c` | Close current window |
+| `<C-w>o` | Keep only current window |
+| `<C-w>=` | Equalize window sizes |
+| `<C-w>+` | Increase window height |
+| `<C-w>-` | Decrease window height |
+| `<C-w>>` | Increase window width |
+| `<C-w><` | Decrease window width |
+
+**I. Tabs**
+
+| Command | Action |
+|---------|--------|
+| `:tabnew` | Create new tab |
+| `:tabc` | Close current tab |
+| `gt` | Next tab |
+| `gT` | Previous tab |
+| `{number}gt` | Go to tab N |
+
+**J. Macros**
+
+| Key | Action |
+|-----|--------|
+| `q{register}` | Start recording macro (e.g., `qa`) |
+| `q` | Stop recording macro |
+| `@{register}` | Execute macro (e.g., `@a`) |
+| `@@` | Repeat last macro |
+| `{number}@{register}` | Execute macro N times |
+
+**K. Registers**
+
+| Key | Action |
+|-----|--------|
+| `"{register}yy` | Yank to register (e.g., `"ayy`) |
+| `"{register}p` | Paste from register (e.g., `"ap`) |
+| `:reg` | View all registers |
+| `"+y` | Yank to system clipboard |
+| `"+p` | Paste from system clipboard |
+| `"*y` | Yank to selection clipboard |
+| `"*p` | Paste from selection clipboard |
+
+**L. Other Useful Commands**
+
+| Key | Action |
+|-----|--------|
+| `.` | Repeat last change |
+| `:noh` | Clear search highlight |
+| `~` | Toggle case of character |
+| `>>` | Indent line right |
+| `<<` | Indent line left |
+| `<C-o>` | Jump to older position |
+| `<C-i>` | Jump to newer position |
+
+</details>
+
+<details>
 <summary><b>🔑 Core Keybindings (Click to expand)</b></summary>
 
 | Key | Action |
