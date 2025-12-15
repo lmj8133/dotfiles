@@ -153,10 +153,10 @@ The included `init.lua` provides a professional IDE-like setup:
 |-----|--------|
 | `h` | Move left |
 | `j` | Move down |
-| `{number}j` | Move down to line N |
 | `k` | Move up |
-| `{number}k` | Move up to line N |
 | `l` | Move right |
+| `{number}j` | Move down to line N |
+| `{number}k` | Move up to line N |
 | `w` | Move to start of next word |
 | `b` | Move to start of previous word |
 | `e` | Move to end of word |
@@ -188,18 +188,15 @@ The included `init.lua` provides a professional IDE-like setup:
 | `x` | Delete character under cursor |
 | `X` | Delete character before cursor |
 | `dd` | Delete entire line |
-| `{number}dd` | Delete N lines |
 | `D` | Delete to end of line |
-| `d{motion}` | Delete motion range |
 | `r` | Replace single character |
 | `s` | Substitute character |
 | `S` | Substitute entire line |
 | `cc` | Change entire line |
 | `C` | Change to end of line |
-| `c{motion}` | Change motion range |
 | `yy` | Yank/copy entire line |
+| `{number}dd` | Delete N lines |
 | `{number}yy` | Yank/copy N lines |
-| `Y` | Yank/copy entire line (same as yy) |
 | `p` | Paste after cursor |
 | `P` | Paste before cursor |
 | `u` | Undo |
@@ -247,8 +244,8 @@ The included `init.lua` provides a professional IDE-like setup:
 | `y` | Yank/copy selection |
 | `c` | Change selection |
 | `>` | Indent right |
-| `{number}>` | Indent right N times |
 | `<` | Indent left |
+| `{number}>` | Indent right N times |
 | `{number}<` | Indent left N times |
 | `~` | Toggle case |
 
@@ -405,25 +402,6 @@ The included `init.lua` provides a professional IDE-like setup:
 | `[d` | Previous diagnostic |
 | `]d` | Next diagnostic |
 | `<leader>cc` | Regenerate compile_commands.json (C/C++) |
-
-</details>
-
-<details>
-<summary><b>🌿 Git (Gitsigns)</b></summary>
-
-| Key | Action |
-|-----|--------|
-| `]c` | Next change |
-| `[c` | Previous change |
-| `<leader>hs` | Stage hunk |
-| `<leader>hr` | Reset hunk |
-| `<leader>hS` | Stage entire file |
-| `<leader>hR` | Reset entire file |
-| `<leader>hu` | Undo stage hunk |
-| `<leader>hp` | Preview hunk |
-| `<leader>hb` | Show line blame |
-| `<leader>hd` | Show diff |
-| `<leader>hD` | Show diff (vs previous version) |
 
 </details>
 

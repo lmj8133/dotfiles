@@ -686,35 +686,6 @@ vim.keymap.set('n', '<C-k>', '<C-w>k', { desc = '移到上方視窗' })
 vim.keymap.set('n', '<leader>sv', ':vsplit<CR>', { desc = '垂直分割', silent = true })
 vim.keymap.set('n', '<leader>sh', ':split<CR>', { desc = '水平分割', silent = true })
 
--- Gitsigns 快捷鍵（在 Gitsigns 載入後設定）
-vim.api.nvim_create_autocmd("User", {
-  pattern = "GitSignsAttach",
-  callback = function()
-    local gs = package.loaded.gitsigns
-    vim.keymap.set('n', ']c', function()
-      if vim.wo.diff then return ']c' end
-      vim.schedule(function() gs.next_hunk() end)
-      return '<Ignore>'
-    end, { expr = true, desc = '下一個變更' })
-    vim.keymap.set('n', '[c', function()
-      if vim.wo.diff then return '[c' end
-      vim.schedule(function() gs.prev_hunk() end)
-      return '<Ignore>'
-    end, { expr = true, desc = '上一個變更' })
-    vim.keymap.set('n', '<leader>hs', gs.stage_hunk, { desc = '暫存區塊' })
-    vim.keymap.set('n', '<leader>hr', gs.reset_hunk, { desc = '重置區塊' })
-    vim.keymap.set('v', '<leader>hs', function() gs.stage_hunk {vim.fn.line('.'), vim.fn.line('v')} end, { desc = '暫存選中區塊' })
-    vim.keymap.set('v', '<leader>hr', function() gs.reset_hunk {vim.fn.line('.'), vim.fn.line('v')} end, { desc = '重置選中區塊' })
-    vim.keymap.set('n', '<leader>hS', gs.stage_buffer, { desc = '暫存整個檔案' })
-    vim.keymap.set('n', '<leader>hR', gs.reset_buffer, { desc = '重置整個檔案' })
-    vim.keymap.set('n', '<leader>hu', gs.undo_stage_hunk, { desc = '取消暫存' })
-    vim.keymap.set('n', '<leader>hp', gs.preview_hunk, { desc = '預覽變更' })
-    vim.keymap.set('n', '<leader>hb', function() gs.blame_line{full=true} end, { desc = '顯示行 blame' })
-    vim.keymap.set('n', '<leader>hd', gs.diffthis, { desc = '顯示差異' })
-    vim.keymap.set('n', '<leader>hD', function() gs.diffthis('~') end, { desc = '顯示差異 (對比上個版本)' })
-  end
-})
-
 -- ========================================
 -- Markdown 工具與一鍵 Pandoc→PDF 指令
 -- ========================================
