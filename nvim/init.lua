@@ -982,6 +982,25 @@ vim.api.nvim_create_autocmd("FileType", {
     end
 })
 
+-- ========================================
+-- Flog: Auto-emojify git log
+-- ========================================
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "floggraph",
+  callback = function()
+    vim.defer_fn(function()
+      -- Only proceed if buffer is still valid and is a floggraph
+      if vim.bo.buftype == "nofile" and vim.fn.executable("emojify") == 1 then
+        vim.bo.modifiable = true
+        vim.cmd('silent! %!emojify')
+        vim.bo.modifiable = false
+        vim.cmd('normal! gg')
+      end
+    end, 150)  -- Delay 150ms to ensure ftplugin is fully loaded
+  end,
+  desc = 'Auto-emojify Flog git log'
+})
+
 print("Neovim 配置載入完成！")
 print("✅ Telescope 跳轉已啟用：<leader>jd/jc/js/jr 或直接用 gd")
 
