@@ -39,9 +39,12 @@ cd /path/to/dotfiles
 
 **What it does:**
 - Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide, fzf, fd-find, ripgrep, gh
-- Copies `zprofile`, `zshrc` to `~/.zprofile`, `~/.zshrc`
-- Copies `init.lua` to `~/.config/nvim/init.lua`
-- Copies Claude Code configurations to `~/.claude/` (includes CLAUDE.md, commands, skills)
+- Copies `zsh/zprofile`, `zsh/zshrc` to `~/.zprofile`, `~/.zshrc`
+- Copies `nvim/init.lua` and `nvim/lua/` to `~/.config/nvim/`
+- Copies `tmux/tmux.conf` to `~/.tmux.conf`
+- Copies `bin/` scripts to `~/.local/bin/`
+- Copies Claude Code configurations from `claude/` to `~/.claude/` (includes CLAUDE.md, commands, skills)
+- Preserves local overrides (`~/.zshrc.local`, `~/.config/nvim/lua/local.lua`) if they exist
 - Clones Zsh plugins to `~/.local/share/zsh-plugins/`
 - Installs nvm + Node 22 + tree-sitter-cli
 - Installs uv (Python toolchain)
@@ -67,15 +70,28 @@ When you first start Zsh, Powerlevel10k will run the configuration wizard. Follo
 dotfiles/
 ├── bootstrap.sh         # Main bootstrap script (sets up entire dev environment)
 ├── uninstall.sh         # Uninstall script (removes all configs and plugins)
+├── CLAUDE.md            # Project-level Claude Code instructions
+├── README.md            # This file
+├── bin/                 # Utility scripts
+│   ├── gen-cc           # Generate compile_commands.json (symlink to gen-compile-commands)
+│   └── gen-compile-commands  # Main C/C++ project analysis script
 ├── claude/              # Claude Code configuration backups
 │   ├── CLAUDE.md        # Global Claude Code instructions
 │   ├── commands/        # Custom slash commands
 │   └── skills/          # Custom Claude Code skills
-├── zprofile             # Zsh login-time environment (Homebrew, locale)
-├── zshrc                # Zsh interactive config (plugins, aliases, keybindings)
-├── init.lua             # Neovim configuration (LSP, plugins, keymaps)
-├── p10k.zsh             # Powerlevel10k theme config (auto-generated after wizard)
-└── README.md            # This file
+├── nvim/                # Neovim configuration
+│   ├── init.lua         # Main Neovim config (LSP, plugins, keymaps)
+│   └── lua/             # Lua modules for local overrides
+├── p10k/                # Powerlevel10k configuration
+│   └── p10k.zsh         # Theme config (backup only, for reference)
+├── tmux/                # Tmux configuration
+│   └── tmux.conf        # Tmux config file
+├── templates/           # Template files for various tools
+│   └── clangd/          # Clangd configuration templates
+└── zsh/                 # Zsh configuration
+    ├── zprofile         # Login-time environment (Homebrew, locale)
+    ├── zshrc            # Interactive config (plugins, aliases, keybindings)
+    └── zshrc.local      # Local overrides (preserved during bootstrap)
 ```
 
 ---
@@ -467,8 +483,6 @@ The setup script covers all essentials. You may optionally want:
 # Pandoc for Markdown→PDF (used by :Md2Pdf in Neovim)
 sudo apt-get install pandoc texlive-xetex
 ```
-
-**Note**: fd-find, ripgrep, gh, and uv are now installed automatically by the bootstrap script.
 
 ---
 
