@@ -57,6 +57,22 @@ g.loaded_netrw = 1
 g.loaded_netrwPlugin = 1
 
 -- ========================================
+-- 確保 PATH 包含 nvm 的 npm global bin
+-- ========================================
+do
+  local nvm_bin = vim.fn.expand('~/.nvm/versions/node/*/bin')
+  local nvm_paths = vim.fn.glob(nvm_bin, true, true)
+  if #nvm_paths > 0 then
+    -- 使用最新版本的 Node.js bin 目錄
+    table.sort(nvm_paths)
+    local latest_bin = nvm_paths[#nvm_paths]
+    if not vim.env.PATH:match(vim.pesc(latest_bin)) then
+      vim.env.PATH = latest_bin .. ':' .. vim.env.PATH
+    end
+  end
+end
+
+-- ========================================
 -- Python 環境自動偵測 (支援 uv)
 -- ========================================
 local function setup_python_env()
