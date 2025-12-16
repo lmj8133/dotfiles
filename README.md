@@ -380,8 +380,8 @@ The included `init.lua` provides a professional IDE-like setup:
 | `<C-l>` | Move to right window |
 | `<C-j>` | Move to window below |
 | `<C-k>` | Move to window above |
-| `<leader>h` | Move to line start |
-| `<leader>l` | Move to line end |
+| `<leader>hh` | Move to line start |
+| `<leader>ll` | Move to line end |
 | `<leader>sv` | Vertical split |
 | `<leader>sh` | Horizontal split |
 | `<C-d>` | Scroll down (Neoscroll) |
@@ -593,34 +593,52 @@ The included `init.lua` provides a professional IDE-like setup:
 </details>
 
 <details>
-<summary><b>🟢 Gitsigns (No Shortcuts Configured!)</b></summary>
+<summary><b>🟢 Gitsigns</b></summary>
 
-> **Note**: Gitsigns is installed but has **no keybindings**. These commands are very useful for hunk operations.
-
-### Hunk Operations
-| Command | Action |
-|---------|--------|
-| `:Gitsigns stage_hunk` | Stage hunk under cursor |
-| `:Gitsigns undo_stage_hunk` | Undo stage |
-| `:Gitsigns reset_hunk` | Discard hunk changes |
-| `:Gitsigns preview_hunk` | Preview hunk diff |
-| `:Gitsigns preview_hunk_inline` | Inline preview |
-
-### Buffer Operations
-| Command | Action |
-|---------|--------|
-| `:Gitsigns stage_buffer` | Stage entire file |
-| `:Gitsigns reset_buffer` | Discard all changes in file |
-| `:Gitsigns blame_line` | Show blame for current line |
-| `:Gitsigns toggle_current_line_blame` | Toggle auto-blame display |
-| `:Gitsigns diffthis` | Show diff |
-| `:Gitsigns toggle_deleted` | Toggle deleted lines display |
+> **Note**: Gitsigns is enabled with automatic inline blame and keybindings.
 
 ### Navigation
-| Command | Action |
-|---------|--------|
-| `:Gitsigns next_hunk` | Jump to next hunk |
-| `:Gitsigns prev_hunk` | Jump to previous hunk |
+| Key | Action |
+|-----|--------|
+| `]c` | Jump to next hunk |
+| `[c` | Jump to previous hunk |
+
+### Hunk Operations
+| Key | Action |
+|-----|--------|
+| `<leader>hs` | Stage hunk under cursor |
+| `<leader>hr` | Reset hunk (discard changes) |
+| `<leader>hu` | Undo stage hunk |
+| `<leader>hp` | Preview hunk diff |
+
+### Buffer Operations
+| Key | Action |
+|-----|--------|
+| `<leader>hS` | Stage entire file |
+| `<leader>hR` | Reset entire file (discard all changes) |
+| `<leader>hb` | Toggle inline blame display |
+| `<leader>hB` | Show full blame for current line |
+| `<leader>hd` | Show diff |
+| `<leader>td` | Toggle deleted lines display |
+| `<leader>hq` | Send all hunks to quickfix list |
+
+### Text Objects
+| Key | Action |
+|-----|--------|
+| `ih` | Select current hunk (visual/operator mode) |
+
+### Visual Mode
+| Key | Action |
+|-----|--------|
+| `<leader>hs` (visual) | Stage selected lines |
+| `<leader>hr` (visual) | Reset selected lines |
+
+### Automatic Inline Blame
+
+Gitsigns automatically shows Git blame information at the end of the current line (similar to VSCode's GitLens):
+- Delay: 500ms after cursor stops moving
+- Format: Shows commit hash, author, and relative time
+- Toggle: Use `<leader>hb` to turn on/off
 
 </details>
 
