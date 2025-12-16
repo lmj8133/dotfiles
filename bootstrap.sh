@@ -233,12 +233,14 @@ else
   npm install -g tree-sitter-cli
 fi
 
-# 安裝 emojify (for git log emoji rendering)
+# 安裝 emojify (bash script for git log emoji rendering)
 if command -v emojify &>/dev/null; then
-  echo "[INFO] emojify already installed: $(emojify --version 2>/dev/null || echo 'version unknown')"
+  echo "[INFO] emojify already installed"
 else
-  echo "[INFO] Installing emojify..."
-  npm install -g emojify
+  echo "[INFO] Installing emojify to ~/.local/bin/emojify..."
+  curl -fsSL https://raw.githubusercontent.com/mrowa44/emojify/master/emojify -o "$HOME/.local/bin/emojify"
+  chmod +x "$HOME/.local/bin/emojify"
+  echo "[INFO] emojify installed successfully"
 fi
 
 # ============================
@@ -261,7 +263,8 @@ echo
 echo "===================================="
 echo "[DONE] Environment setup finished."
 echo " - Neovim / Zsh / plugins installed"
-echo " - nvm + Node 22 + tree-sitter-cli + emojify"
+echo " - nvm + Node 22 + tree-sitter-cli"
+echo " - emojify (git log emoji renderer)"
 echo " - uv (Python toolchain)"
 echo " - fd-find, ripgrep, fzf, zoxide"
 echo " - Locale: en_US.UTF-8"
