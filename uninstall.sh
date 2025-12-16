@@ -37,15 +37,17 @@ fi
 ITEMS_TO_REMOVE=(
   "$HOME/.zshrc:Zsh configuration"
   "$HOME/.zprofile:Zsh profile"
+  "$HOME/.zshrc.local:Custom Zsh configurations (optional)"
   "$HOME/.zsh_history:Zsh command history"
   "$HOME/.p10k.zsh:Powerlevel10k configuration"
+  "$HOME/.tmux.conf:Tmux configuration"
   "$HOME/.config/nvim:Neovim configuration"
   "$HOME/.local/share/nvim:Neovim plugins and data"
   "$HOME/.local/state/nvim:Neovim state files"
   "$HOME/.cache/nvim:Neovim cache"
   "$HOME/.local/share/zsh-plugins:Zsh plugins directory"
   "$HOME/.nvm:Node Version Manager"
-  "$HOME/.zshrc.local:Custom Zsh configurations (optional)"
+  "$HOME/.config/gen-cc:gen-cc templates directory"
 )
 
 # ============================
@@ -64,7 +66,7 @@ for item in "${ITEMS_TO_REMOVE[@]}"; do
   if [[ -e "$path" ]]; then
     echo "  ✓ $desc"
     echo "    → $path"
-    ((EXISTS_COUNT++))
+    ((++EXISTS_COUNT))
   else
     echo "  ✗ $desc (not found)"
   fi
@@ -107,7 +109,7 @@ for item in "${ITEMS_TO_REMOVE[@]}"; do
       rm -rf "$path"
       info "Removed: $path"
     fi
-    ((REMOVED_COUNT++))
+    ((++REMOVED_COUNT))
   fi
 done
 
@@ -129,7 +131,7 @@ if command -v uv &> /dev/null; then
     if [[ -n "$UV_PYTHON_DIR" && -d "$UV_PYTHON_DIR" ]]; then
       rm -rf "$UV_PYTHON_DIR"
       info "Removed UV Python versions: $UV_PYTHON_DIR"
-      ((REMOVED_COUNT++))
+      ((++REMOVED_COUNT))
     fi
 
     # Remove UV tools
@@ -137,7 +139,7 @@ if command -v uv &> /dev/null; then
     if [[ -n "$UV_TOOL_DIR" && -d "$UV_TOOL_DIR" ]]; then
       rm -rf "$UV_TOOL_DIR"
       info "Removed UV tools: $UV_TOOL_DIR"
-      ((REMOVED_COUNT++))
+      ((++REMOVED_COUNT))
     fi
   fi
 else
@@ -160,7 +162,7 @@ for uv_bin in "${UV_BINS[@]}"; do
       rm -f "$uv_bin"
       info "Removed UV binary: $uv_bin"
     fi
-    ((REMOVED_COUNT++))
+    ((++REMOVED_COUNT))
   fi
 done
 
