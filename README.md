@@ -527,6 +527,396 @@ The included `init.lua` provides a professional IDE-like setup:
 
 ---
 
+## Shell & Terminal Keybindings
+
+<details>
+<summary><b>🎯 Zsh Vi-mode Keybindings</b></summary>
+
+> **Note**: This dotfiles setup includes the `zsh-vi-mode` plugin, providing full Vi keybindings in the shell.
+
+**A. Mode Switching**
+
+| Key | Action |
+|-----|--------|
+| `<Esc>` | Enter normal mode from insert mode |
+| `<C-c>` | Enter normal mode from insert mode |
+| `<C-[>` | Enter normal mode from insert mode |
+| `i` | Enter insert mode before cursor |
+| `a` | Enter insert mode after cursor |
+| `I` | Enter insert mode at beginning of line |
+| `A` | Enter insert mode at end of line |
+| `v` | Enter visual mode (character-wise) |
+| `V` | Enter visual mode (line-wise) |
+
+**B. Normal Mode - Movement**
+
+| Key | Action |
+|-----|--------|
+| `h` | Move left |
+| `j` | Move down (also searches history if integrated) |
+| `k` | Move up (also searches history if integrated) |
+| `l` | Move right |
+| `w` | Move to start of next word |
+| `b` | Move to start of previous word |
+| `e` | Move to end of word |
+| `0` | Move to start of line |
+| `^` | Move to first non-blank character |
+| `$` | Move to end of line |
+| `f{char}` | Move to next occurrence of char |
+| `F{char}` | Move to previous occurrence of char |
+| `t{char}` | Move to before next occurrence of char |
+| `T{char}` | Move to before previous occurrence of char |
+| `;` | Repeat last f/F/t/T |
+| `,` | Repeat last f/F/t/T in reverse |
+
+**C. Normal Mode - Editing**
+
+| Key | Action |
+|-----|--------|
+| `x` | Delete character under cursor |
+| `X` | Delete character before cursor |
+| `dd` | Delete entire line |
+| `D` | Delete to end of line |
+| `cc` | Change entire line |
+| `C` | Change to end of line |
+| `s` | Substitute character |
+| `S` | Substitute entire line |
+| `r{char}` | Replace character under cursor |
+| `p` | Paste after cursor |
+| `P` | Paste before cursor |
+| `u` | Undo |
+| `<C-r>` | Redo |
+| `.` | Repeat last change |
+
+**D. Normal Mode - Yank (Copy)**
+
+| Key | Action |
+|-----|--------|
+| `yy` | Yank entire line |
+| `Y` | Yank to end of line |
+| `yw` | Yank word |
+| `y$` | Yank to end of line |
+| `y0` | Yank to start of line |
+
+**E. Visual Mode**
+
+| Key | Action |
+|-----|--------|
+| `v` | Enter character-wise visual mode |
+| `V` | Enter line-wise visual mode |
+| `d` | Delete selection |
+| `y` | Yank selection |
+| `c` | Change selection |
+| `~` | Toggle case of selection |
+
+**F. Text Objects**
+
+| Key | Action |
+|-----|--------|
+| `iw` | Inner word |
+| `aw` | A word (with surrounding space) |
+| `i"` | Inner double quotes |
+| `a"` | A pair of double quotes |
+| `i'` | Inner single quotes |
+| `a'` | A pair of single quotes |
+| `i(` / `i)` / `ib` | Inner parentheses |
+| `a(` / `a)` / `ab` | A pair of parentheses |
+| `i{` / `i}` / `iB` | Inner braces |
+| `a{` / `a}` / `aB` | A pair of braces |
+
+**G. History Integration**
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` (in normal mode) | History substring search up |
+| `↓` / `j` (in normal mode) | History substring search down |
+| `/` | Search history forward |
+| `?` | Search history backward |
+| `n` | Next match in history search |
+| `N` | Previous match in history search |
+
+</details>
+
+<details>
+<summary><b>⌨️ Bash/Zsh Readline Keybindings</b></summary>
+
+> **Note**: These are standard Emacs-style keybindings available in both Bash and Zsh (when not in Vi mode).
+
+**A. Cursor Movement**
+
+| Key | Action |
+|-----|--------|
+| `<C-a>` | Move to beginning of line |
+| `<C-e>` | Move to end of line |
+| `<C-f>` | Move forward one character |
+| `<C-b>` | Move backward one character |
+| `<M-f>` / `<Alt-f>` | Move forward one word |
+| `<M-b>` / `<Alt-b>` | Move backward one word |
+
+**B. Editing**
+
+| Key | Action |
+|-----|--------|
+| `<C-d>` | Delete character under cursor (or EOF if line is empty) |
+| `<C-h>` | Delete character before cursor (backspace) |
+| `<C-w>` | Delete word before cursor |
+| `<M-d>` / `<Alt-d>` | Delete word after cursor |
+| `<C-k>` | Kill (cut) to end of line |
+| `<C-u>` | Kill (cut) to beginning of line |
+| `<C-y>` | Yank (paste) killed text |
+| `<M-y>` / `<Alt-y>` | Rotate through kill ring |
+| `<C-t>` | Transpose characters |
+| `<M-t>` / `<Alt-t>` | Transpose words |
+| `<M-u>` / `<Alt-u>` | Uppercase word |
+| `<M-l>` / `<Alt-l>` | Lowercase word |
+| `<M-c>` / `<Alt-c>` | Capitalize word |
+
+**C. History**
+
+| Key | Action |
+|-----|--------|
+| `<C-r>` | Reverse incremental search (fzf integration if available) |
+| `<C-s>` | Forward incremental search |
+| `<C-p>` | Previous command in history |
+| `<C-n>` | Next command in history |
+| `<C-g>` | Abort history search |
+| `↑` | Previous command (or history substring search if configured) |
+| `↓` | Next command (or history substring search if configured) |
+| `!!` | Repeat last command |
+| `!$` | Last argument of previous command |
+| `!*` | All arguments of previous command |
+
+**D. Completion**
+
+| Key | Action |
+|-----|--------|
+| `<Tab>` | Complete command/filename |
+| `<M-?>` / `<Alt-?>` | List all completions |
+| `<M-*>` / `<Alt-*>` | Insert all completions |
+| `<C-x><C-e>` | Edit command in $EDITOR |
+
+**E. Special Functions**
+
+| Key | Action |
+|-----|--------|
+| `<C-l>` | Clear screen |
+| `<C-d>` | Exit shell (if line is empty) |
+| `<C-z>` | Suspend current process (send to background) |
+| `<C-c>` | Send SIGINT (interrupt current command) |
+| `<C-\>` | Send SIGQUIT |
+| `<C-o>` | Execute command and bring up next line |
+
+**F. Undo/Redo**
+
+| Key | Action |
+|-----|--------|
+| `<C-_>` / `<C-x><C-u>` | Undo last edit |
+| `<M-r>` / `<Alt-r>` | Revert line to original state |
+
+**G. fzf Integration (if installed)**
+
+| Key | Action |
+|-----|--------|
+| `<C-r>` | Fuzzy search command history |
+| `<C-t>` | Fuzzy find files in current directory |
+| `<M-c>` / `<Alt-c>` | Fuzzy find directory and cd into it |
+
+</details>
+
+<details>
+<summary><b>🖥️ Tmux Keybindings and Operations</b></summary>
+
+> **Note**: Default prefix key is `Ctrl-B`. Press prefix, then the command key. Mouse support is enabled in this configuration (`set -g mouse on`).
+
+**A. Basic Commands**
+
+| Key | Action |
+|-----|--------|
+| `<C-b>?` | Show all keybindings |
+| `<C-b>:` | Enter command mode |
+| `<C-b>d` | Detach from session |
+| `<C-b>t` | Show clock |
+| `<C-b>~` | Show messages |
+
+**B. Session Management**
+
+| Command | Action |
+|---------|--------|
+| `tmux new -s <name>` | Create new session with name |
+| `tmux ls` | List sessions |
+| `tmux attach -t <name>` | Attach to session |
+| `tmux kill-session -t <name>` | Kill session |
+| `<C-b>$` | Rename current session |
+| `<C-b>s` | List and switch sessions |
+| `<C-b>(` | Previous session |
+| `<C-b>)` | Next session |
+
+**C. Window Management**
+
+| Key | Action |
+|-----|--------|
+| `<C-b>c` | Create new window |
+| `<C-b>,` | Rename current window |
+| `<C-b>w` | List and select windows |
+| `<C-b>n` | Next window |
+| `<C-b>p` | Previous window |
+| `<C-b>0-9` | Switch to window 0-9 |
+| `<C-b>&` | Kill current window (with confirmation) |
+| `<C-b>l` | Switch to last active window |
+| `<C-b>f` | Find window by name |
+
+**D. Pane Management**
+
+| Key | Action |
+|-----|--------|
+| `<C-b>%` | Split pane vertically |
+| `<C-b>"` | Split pane horizontally |
+| `<C-b>o` | Switch to next pane |
+| `<C-b>;` | Switch to last active pane |
+| `<C-b>↑/↓/←/→` | Navigate to pane in direction |
+| `<C-b><C-↑/↓/←/→>` | Resize pane in direction |
+| `<C-b>z` | Toggle pane zoom (fullscreen) |
+| `<C-b>x` | Kill current pane (with confirmation) |
+| `<C-b>!` | Break pane into new window |
+| `<C-b>{` | Move pane left |
+| `<C-b>}` | Move pane right |
+| `<C-b><Space>` | Cycle through pane layouts |
+| `<C-b>q` | Show pane numbers (type number to switch) |
+
+**E. Copy Mode (Vi-style)**
+
+> **Workflow**: `<C-b>[` to enter copy mode → navigate with `h/j/k/l` → press `<Space>` to start selection → move to end → press `<Enter>` to copy and exit → `<C-b>]` to paste
+
+| Key | Action |
+|-----|--------|
+| `<C-b>[` | Enter copy mode (browse mode) |
+| `h/j/k/l` | Vi-style movement in copy mode |
+| `<Space>` | Start selection (must press this before selecting) |
+| `<Enter>` | Copy selection and exit copy mode |
+| `v` | Begin selection (vi mode alternative) |
+| `V` | Select line (vi mode) |
+| `y` | Copy selection (vi mode alternative) |
+| `q` / `<Esc>` | Exit copy mode without copying |
+| `/` | Search forward |
+| `?` | Search backward |
+| `n` | Next search match |
+| `N` | Previous search match |
+| `<C-b>]` | Paste copied text (in normal mode) |
+
+**F. Synchronize Panes**
+
+| Command | Action |
+|---------|--------|
+| `<C-b>:setw synchronize-panes on` | Enable synchronized input to all panes |
+| `<C-b>:setw synchronize-panes off` | Disable synchronized input |
+
+**G. Mouse Support (Enabled)**
+
+| Action | Description |
+|--------|-------------|
+| Click pane | Switch to pane |
+| Click window | Switch to window |
+| Drag pane border | Resize pane |
+| Drag text | Select and copy text |
+| Right-click | Paste copied text |
+| Scroll wheel | Scroll through history |
+
+</details>
+
+<details>
+<summary><b>🔌 Zsh Plugin Features Explained</b></summary>
+
+**A. zsh-autosuggestions**
+
+Fish-like command suggestions based on history and completion.
+
+| Feature | Description |
+|---------|-------------|
+| **Auto-suggest** | Shows gray suggestion while typing |
+| **Accept suggestion** | Press `→` (right arrow) to accept |
+| **Partial accept** | Press `<C-f>` to accept one word |
+| **Strategy** | History first, then completion |
+| **Configuration** | `ZSH_AUTOSUGGEST_STRATEGY=(history completion)` |
+
+**B. zsh-history-substring-search**
+
+Search command history based on substring matching.
+
+| Feature | Description |
+|---------|-------------|
+| **Trigger** | Type partial command, then press `↑` or `↓` |
+| **Vi-mode integration** | Also works with `k`/`j` in normal mode |
+| **Highlighting** | Highlights matching part of command |
+| **Fuzzy matching** | Finds commands with substring anywhere |
+| **Keybindings** | `↑`/`↓` in insert mode, `k`/`j` in normal mode |
+
+**C. zsh-syntax-highlighting**
+
+Real-time syntax highlighting for the command line.
+
+| Feature | Description |
+|---------|-------------|
+| **Valid commands** | Highlighted in green |
+| **Invalid commands** | Highlighted in red |
+| **Valid paths** | Underlined |
+| **Quoted strings** | Highlighted in yellow |
+| **Comments** | Highlighted in gray (if enabled) |
+| **Loading order** | Must be loaded last for correct highlighting |
+
+**D. zsh-completions**
+
+Additional completion definitions for various tools.
+
+| Feature | Description |
+|---------|-------------|
+| **Extra completions** | Support for 100+ additional commands |
+| **Usage** | Press `<Tab>` to trigger completion |
+| **Smart matching** | Case-insensitive, partial matching |
+| **Integration** | Automatically loaded into `FPATH` |
+| **Configuration** | `zstyle ':completion:*' matcher-list '' 'm:{a-z}={A-Za-z}'` |
+
+**E. powerlevel10k**
+
+Fast and highly customizable prompt theme.
+
+| Feature | Description |
+|---------|-------------|
+| **Performance** | Instant prompt (appears before shell loads) |
+| **Configuration** | Run `p10k configure` for wizard |
+| **Config file** | `~/.p10k.zsh` |
+| **Segments** | Git status, Python venv, Node version, etc. |
+| **Reconfigure** | Run `p10k configure` anytime to change |
+
+**F. zoxide**
+
+Smart directory jumping that learns your habits.
+
+| Command | Description |
+|---------|-------------|
+| `z <partial>` | Jump to directory matching partial name |
+| `zi` | Interactive directory selection with fzf |
+| `z -` | Go to previous directory |
+| `zoxide query <partial>` | Query directory path without jumping |
+| **Learning** | Tracks frequency and recency of directory visits |
+| **Scoring** | Frecency algorithm (frequency + recency) |
+
+**G. fzf (Fuzzy Finder)**
+
+Command-line fuzzy finder for files and history.
+
+| Feature | Description |
+|---------|-------------|
+| **Ctrl-R** | Fuzzy search command history |
+| **Ctrl-T** | Fuzzy find files in current directory |
+| **Alt-C** | Fuzzy find directory and cd into it |
+| **fd integration** | Uses `fd` for faster file search if available |
+| **Default command** | `FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'` |
+| **Preview** | Shows file preview in fzf window |
+
+</details>
+
+---
+
 ## Custom Commands in Zsh
 
 The `zshrc` provides these helper functions:
