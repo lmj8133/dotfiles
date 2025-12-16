@@ -38,7 +38,7 @@ cd /path/to/dotfiles
 ```
 
 **What it does:**
-- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide, fzf, fd-find, ripgrep, gh
+- Installs system packages: neovim, zsh, curl, wget, git, build-essential, clangd, zoxide, fzf, fd-find, ripgrep, gh, unzip
 - Copies `zsh/zprofile`, `zsh/zshrc` to `~/.zprofile`, `~/.zshrc`
 - Copies `nvim/init.lua` and `nvim/lua/` to `~/.config/nvim/`
 - Copies `tmux/tmux.conf` to `~/.tmux.conf`

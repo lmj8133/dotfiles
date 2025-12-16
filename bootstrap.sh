@@ -28,7 +28,7 @@ echo "[INFO] Checking package installation status..."
 # Define all packages to install
 PACKAGES=(
   neovim curl wget git zsh build-essential libssl-dev
-  clangd locales zoxide fzf fd-find ripgrep gh tmux bear
+  clangd locales zoxide fzf fd-find ripgrep gh tmux bear unzip
 )
 
 # Check which packages are already installed
