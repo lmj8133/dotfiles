@@ -527,6 +527,105 @@ The included `init.lua` provides a professional IDE-like setup:
 
 ---
 
+## Git Commands Reference (Without Shortcuts)
+
+> **Note**: These Git tools are installed but don't have shortcuts configured. Use them via command mode (`:command`).
+
+<details>
+<summary><b>📊 Flog (Git Log Viewer)</b></summary>
+
+### Basic Commands
+| Command | Action |
+|---------|--------|
+| `:Flog` | Open git log in new tab |
+| `:Flogsplit` | Open in horizontal split |
+| `:Floggit` | Open in current window |
+
+### Inside Flog Window
+| Key | Action |
+|-----|--------|
+| `<CR>` | View commit details |
+| `o` | Open in new window |
+| `dd` | View diff |
+| `gb` | Git bisect at commit |
+| `yc` | Copy commit hash |
+| `q` | Close Flog |
+
+</details>
+
+<details>
+<summary><b>🔍 Git Blame (Fugitive)</b></summary>
+
+### Commands
+| Command | Action |
+|---------|--------|
+| `:Git blame` | Show blame for current file |
+| `:Git blame -w` | Ignore whitespace changes |
+| `:Git blame -C` | Detect code copied across files |
+| `:Git blame -M` | Detect code moved within file |
+
+### Inside Blame Window
+| Key | Action |
+|-----|--------|
+| `g?` | Show help |
+| `o` | Open commit |
+| `O` | Open in new tab |
+| `p` | Preview commit |
+| `-` | Re-run blame on parent commit |
+| `q` | Close blame window |
+
+### Other Fugitive Commands
+| Command | Action |
+|---------|--------|
+| `:G` / `:Git` | Git status interface |
+| `:Gwrite` / `:Gw` | Stage current file (git add) |
+| `:Gread` / `:Gr` | Discard changes (git checkout) |
+| `:Gdiffsplit` | Show diff in split |
+| `:Gvdiffsplit` | Vertical diff split |
+| `:GMove <new>` | Rename/move file (git mv) |
+| `:GDelete` | Delete file (git rm) |
+| `:Gcommit` | Open commit interface |
+| `:Gpush` | Git push |
+| `:Gpull` | Git pull |
+| `:Glog` | Load commit history to quickfix |
+| `:Gclog` | Load file's commit history |
+
+</details>
+
+<details>
+<summary><b>🟢 Gitsigns (No Shortcuts Configured!)</b></summary>
+
+> **Note**: Gitsigns is installed but has **no keybindings**. These commands are very useful for hunk operations.
+
+### Hunk Operations
+| Command | Action |
+|---------|--------|
+| `:Gitsigns stage_hunk` | Stage hunk under cursor |
+| `:Gitsigns undo_stage_hunk` | Undo stage |
+| `:Gitsigns reset_hunk` | Discard hunk changes |
+| `:Gitsigns preview_hunk` | Preview hunk diff |
+| `:Gitsigns preview_hunk_inline` | Inline preview |
+
+### Buffer Operations
+| Command | Action |
+|---------|--------|
+| `:Gitsigns stage_buffer` | Stage entire file |
+| `:Gitsigns reset_buffer` | Discard all changes in file |
+| `:Gitsigns blame_line` | Show blame for current line |
+| `:Gitsigns toggle_current_line_blame` | Toggle auto-blame display |
+| `:Gitsigns diffthis` | Show diff |
+| `:Gitsigns toggle_deleted` | Toggle deleted lines display |
+
+### Navigation
+| Command | Action |
+|---------|--------|
+| `:Gitsigns next_hunk` | Jump to next hunk |
+| `:Gitsigns prev_hunk` | Jump to previous hunk |
+
+</details>
+
+---
+
 ## Shell & Terminal Keybindings
 
 <details>
