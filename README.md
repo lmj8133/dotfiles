@@ -337,12 +337,14 @@ The included `init.lua` provides a professional IDE-like setup:
 </details>
 
 <details>
-<summary><b>🔑 Core Keybindings (Click to expand)</b></summary>
+<summary><b>🔑 Core Keybindings</b></summary>
 
 | Key | Action |
 |-----|--------|
 | `<Space>` | Leader key |
 | `<leader>e` | Toggle file tree (nvim-tree) |
+| `<leader>w` | Save file |
+| `<leader>q` | Quit |
 | `<leader>ff` | Find files |
 | `<leader>fg` | Live grep (search in files) |
 | `gd` | Go to definition |
@@ -378,6 +380,8 @@ The included `init.lua` provides a professional IDE-like setup:
 | `<C-l>` | Move to right window |
 | `<C-j>` | Move to window below |
 | `<C-k>` | Move to window above |
+| `<leader>h` | Move to line start |
+| `<leader>l` | Move to line end |
 | `<leader>sv` | Vertical split |
 | `<leader>sh` | Horizontal split |
 | `<C-d>` | Scroll down (Neoscroll) |

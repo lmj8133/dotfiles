@@ -651,6 +651,11 @@ vim.api.nvim_create_user_command('GenCC', regenerate_compile_commands,
 
 -- 基礎快捷鍵
 vim.keymap.set('n', '<leader>e', ':NvimTreeToggle<CR>', { desc = '切換檔案樹', silent = true })
+vim.keymap.set('n', '<leader>w', ':w<CR>', { desc = '儲存檔案', silent = true })
+vim.keymap.set('n', '<leader>q', ':q<CR>', { desc = '退出', silent = true })
+-- 快速移動
+vim.keymap.set('n', '<leader>h', '^', { desc = '移到行首' })
+vim.keymap.set('n', '<leader>l', '$', { desc = '移到行尾' })
 
 -- Telescope shortcuts
 vim.keymap.set('n', '<leader>ff', ':Telescope find_files<CR>', { desc = 'Find files', silent = true })
