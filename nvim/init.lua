@@ -420,7 +420,64 @@ require("lazy").setup({
   },
 
   -- Git
-  { 'lewis6991/gitsigns.nvim', config = true },
+  {
+    'lewis6991/gitsigns.nvim',
+    config = function()
+      require('gitsigns').setup({
+        -- Enable inline blame (like VSCode GitLens)
+        current_line_blame = true,
+        current_line_blame_opts = {
+          virt_text = true,
+          virt_text_pos = 'eol',  -- Show at end of line
+          delay = 500,  -- Delay 500ms to avoid distraction
+        },
+        on_attach = function(bufnr)
+          local gs = package.loaded.gitsigns
+
+          -- Helper function for keymap
+          local function map(mode, lhs, rhs, opts)
+            opts = opts or {}
+            opts.buffer = bufnr
+            vim.keymap.set(mode, lhs, rhs, opts)
+          end
+
+          -- Navigation
+          map('n', ']c', function()
+            if vim.wo.diff then return ']c' end
+            vim.schedule(function() gs.next_hunk() end)
+            return '<Ignore>'
+          end, { expr = true, desc = '下一個變更' })
+
+          map('n', '[c', function()
+            if vim.wo.diff then return '[c' end
+            vim.schedule(function() gs.prev_hunk() end)
+            return '<Ignore>'
+          end, { expr = true, desc = '上一個變更' })
+
+          -- Actions (保持原有 <leader>h 前綴)
+          map('n', '<leader>hs', gs.stage_hunk, { desc = '暫存區塊' })
+          map('n', '<leader>hr', gs.reset_hunk, { desc = '重置區塊' })
+          map('v', '<leader>hs', function() gs.stage_hunk {vim.fn.line('.'), vim.fn.line('v')} end, { desc = '暫存選中區塊' })
+          map('v', '<leader>hr', function() gs.reset_hunk {vim.fn.line('.'), vim.fn.line('v')} end, { desc = '重置選中區塊' })
+          map('n', '<leader>hS', gs.stage_buffer, { desc = '暫存整個檔案' })
+          map('n', '<leader>hR', gs.reset_buffer, { desc = '重置整個檔案' })
+          map('n', '<leader>hu', gs.undo_stage_hunk, { desc = '取消暫存' })
+          map('n', '<leader>hp', gs.preview_hunk, { desc = '預覽變更' })
+          map('n', '<leader>hb', gs.toggle_current_line_blame, { desc = '切換行 blame' })
+          map('n', '<leader>hB', function() gs.blame_line{full=true} end, { desc = '顯示完整 blame' })
+          map('n', '<leader>hd', gs.diffthis, { desc = '顯示差異' })
+          map('n', '<leader>td', gs.toggle_deleted, { desc = '切換顯示已刪除行' })
+          map('n', '<leader>hq', function()
+            gs.setqflist('all')
+            vim.cmd('copen')
+          end, { desc = '所有變更到 quickfix' })
+
+          -- Text objects
+          map({'o', 'x'}, 'ih', ':<C-U>Gitsigns select_hunk<CR>', { desc = '選擇 Git hunk' })
+        end
+      })
+    end
+  },
   { 'tpope/vim-fugitive' },
   {
     "rbong/vim-flog",
@@ -654,8 +711,8 @@ vim.keymap.set('n', '<leader>e', ':NvimTreeToggle<CR>', { desc = '切換檔案�
 vim.keymap.set('n', '<leader>w', ':w<CR>', { desc = '儲存檔案', silent = true })
 vim.keymap.set('n', '<leader>q', ':q<CR>', { desc = '退出', silent = true })
 -- 快速移動
-vim.keymap.set('n', '<leader>h', '^', { desc = '移到行首' })
-vim.keymap.set('n', '<leader>l', '$', { desc = '移到行尾' })
+vim.keymap.set('n', '<leader>hh', '^', { desc = '移到行首' })
+vim.keymap.set('n', '<leader>ll', '$', { desc = '移到行尾' })
 
 -- Telescope shortcuts
 vim.keymap.set('n', '<leader>ff', ':Telescope find_files<CR>', { desc = 'Find files', silent = true })
