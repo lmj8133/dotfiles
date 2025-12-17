@@ -738,6 +738,25 @@ vim.keymap.set('n', '<leader>fF', function()
   })
 end, { desc = 'Find files (less ignored)', silent = true })
 vim.keymap.set('n', '<leader>fg', ':Telescope live_grep<CR>', { desc = 'Live grep', silent = true })
+vim.keymap.set('n', '<leader>fG', function()
+  require('telescope.builtin').live_grep({
+    additional_args = function()
+      return {
+        "--hidden",
+        "--no-ignore",
+        "--glob", "!node_modules/**",
+        "--glob", "!.git/**",
+        "--glob", "!*.pyc",
+        "--glob", "!__pycache__/**",
+        "--glob", "!.cache/**",
+        "--glob", "!venv/**",
+        "--glob", "!.venv/**",
+        "--glob", "!.venv-wsl/**",
+      }
+    end,
+    prompt_prefix = "GREP ALL> ",
+  })
+end, { desc = 'Live grep (less ignored)', silent = true })
 vim.keymap.set('n', '<leader>fb', ':Telescope buffers<CR>', { desc = 'Buffers', silent = true })
 vim.keymap.set('n', '<leader>fh', ':Telescope help_tags<CR>', { desc = 'Help tags', silent = true })
 vim.keymap.set('n', '<leader>fr', ':Telescope oldfiles<CR>', { desc = 'Recent files', silent = true })
