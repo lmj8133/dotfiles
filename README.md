@@ -525,9 +525,20 @@ The included `init.lua` provides a professional IDE-like setup:
 
 </details>
 
+<details>
+<summary><b>🔀 Git (Telescope)</b></summary>
+
+| Key | Action |
+|-----|--------|
+| `<leader>gs` | Git status (show changed files) |
+| `<leader>gc` | Git commits (browse history) |
+| `<leader>gb` | Git branches (switch branches) |
+
+</details>
+
 ---
 
-## Git Commands Reference (Without Shortcuts)
+## Git Commands Reference
 
 > **Note**: These Git tools are installed but don't have shortcuts configured. Use them via command mode (`:command`).
 

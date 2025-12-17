@@ -724,6 +724,11 @@ vim.keymap.set('n', '<leader>fc', ':Telescope commands<CR>', { desc = 'Commands'
 vim.keymap.set('n', '<leader>fs', ':Telescope resume<CR>', { desc = 'Resume last search', silent = true })
 vim.keymap.set('n', '<leader>sw', ':Telescope grep_string<CR>', { desc = 'Search word under cursor', silent = true })
 
+-- Telescope Git shortcuts
+vim.keymap.set('n', '<leader>gs', ':Telescope git_status<CR>', { desc = 'Git status (changed files)', silent = true })
+vim.keymap.set('n', '<leader>gc', ':Telescope git_commits<CR>', { desc = 'Git commits', silent = true })
+vim.keymap.set('n', '<leader>gb', ':Telescope git_branches<CR>', { desc = 'Git branches', silent = true })
+
 -- LSP 快捷鍵
 vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = '跳轉到定義' })
 vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, { desc = '跳轉到聲明' })
