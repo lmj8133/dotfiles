@@ -726,6 +726,15 @@ vim.keymap.set('n', '<leader>fF', function()
   })
 end, { desc = 'Find all files (ignore .gitignore)', silent = true })
 vim.keymap.set('n', '<leader>fg', ':Telescope live_grep<CR>', { desc = 'Live grep', silent = true })
+vim.keymap.set('n', '<leader>fG', function()
+  require('telescope.builtin').live_grep({
+    additional_args = function()
+      return { "--no-ignore", "--hidden" }
+    end,
+    prompt_prefix = "GREP ALL> ",
+    debounce = 300,
+  })
+end, { desc = 'Grep all files (ignore .gitignore)', silent = true })
 vim.keymap.set('n', '<leader>fb', ':Telescope buffers<CR>', { desc = 'Buffers', silent = true })
 vim.keymap.set('n', '<leader>fh', ':Telescope help_tags<CR>', { desc = 'Help tags', silent = true })
 vim.keymap.set('n', '<leader>fr', ':Telescope oldfiles<CR>', { desc = 'Recent files', silent = true })
