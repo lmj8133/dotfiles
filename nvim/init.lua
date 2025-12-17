@@ -719,12 +719,24 @@ vim.keymap.set('n', '<leader>ll', '$', { desc = '移到行尾' })
 vim.keymap.set('n', '<leader>ff', ':Telescope find_files<CR>', { desc = 'Find files', silent = true })
 vim.keymap.set('n', '<leader>fF', function()
   require('telescope.builtin').find_files({
-    find_command = { "fdfind", "--type", "f", "--hidden", "--no-ignore" },
+    find_command = {
+      "fdfind",
+      "--type", "f",
+      "--hidden",
+      "--no-ignore",
+      "--exclude", "node_modules",
+      "--exclude", ".git",
+      "--exclude", "*.pyc",
+      "--exclude", "__pycache__",
+      "--exclude", ".cache",
+      "--exclude", "venv",
+      "--exclude", ".venv",
+      "--exclude", ".venv-wsl",
+    },
     prompt_prefix = "FIND ALL> ",
-    debounce = 300,
     disable_devicons = true,
   })
-end, { desc = 'Find all files (ignore .gitignore)', silent = true })
+end, { desc = 'Find files (less ignored)', silent = true })
 vim.keymap.set('n', '<leader>fg', ':Telescope live_grep<CR>', { desc = 'Live grep', silent = true })
 vim.keymap.set('n', '<leader>fG', function()
   require('telescope.builtin').live_grep({
