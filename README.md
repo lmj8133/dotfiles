@@ -361,9 +361,11 @@ The included `init.lua` provides a professional IDE-like setup:
 |-----|--------|
 | `<leader>e` | Toggle file tree |
 | `<leader>ff` | Find files |
+| `<leader>fF` | Find files (all files) |
 | `<leader>fb` | Switch buffer |
 | `<leader>fr` | Recent files |
 | `<leader>fg` | Live grep |
+| `<leader>fG` | Live grep (all files) |
 | `<leader>fh` | Search help tags |
 | `<leader>fc` | Search commands |
 | `<leader>fs` | Resume last search |
