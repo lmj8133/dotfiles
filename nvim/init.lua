@@ -163,6 +163,7 @@ require("lazy").setup({
     config = function()
       local telescope = require('telescope')
       local actions = require('telescope.actions')
+
       telescope.setup({
         defaults = {
           mappings = {
@@ -716,6 +717,14 @@ vim.keymap.set('n', '<leader>ll', '$', { desc = '移到行尾' })
 
 -- Telescope shortcuts
 vim.keymap.set('n', '<leader>ff', ':Telescope find_files<CR>', { desc = 'Find files', silent = true })
+vim.keymap.set('n', '<leader>fF', function()
+  require('telescope.builtin').find_files({
+    find_command = { "fdfind", "--type", "f", "--hidden", "--no-ignore" },
+    prompt_prefix = "FIND ALL> ",
+    debounce = 300,
+    disable_devicons = true,
+  })
+end, { desc = 'Find all files (ignore .gitignore)', silent = true })
 vim.keymap.set('n', '<leader>fg', ':Telescope live_grep<CR>', { desc = 'Live grep', silent = true })
 vim.keymap.set('n', '<leader>fb', ':Telescope buffers<CR>', { desc = 'Buffers', silent = true })
 vim.keymap.set('n', '<leader>fh', ':Telescope help_tags<CR>', { desc = 'Help tags', silent = true })
