@@ -709,6 +709,10 @@ vim.api.nvim_create_user_command('GenCC', regenerate_compile_commands,
 
 -- 基礎快捷鍵
 vim.keymap.set('n', '<leader>e', ':NvimTreeToggle<CR>', { desc = '切換檔案樹', silent = true })
+vim.keymap.set('n', '<leader>ef', ':NvimTreeFindFile<CR>', { desc = '在樹中定位檔案', silent = true })
+vim.keymap.set('n', '<leader>er', function()
+  require('nvim-tree.api').tree.change_root(vim.fn.getcwd())
+end, { desc = '回到專案根目錄', silent = true })
 vim.keymap.set('n', '<leader>w', ':w<CR>', { desc = '儲存檔案', silent = true })
 vim.keymap.set('n', '<leader>q', ':q<CR>', { desc = '退出', silent = true })
 -- 快速移動
