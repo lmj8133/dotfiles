@@ -496,6 +496,7 @@ The included `init.lua` provides a professional IDE-like setup:
 | `t` | Open in new tab |
 | `s` | Open in horizontal split |
 | `v` | Open in vertical split |
+| `I` | Toggle gitignore filter |
 
 </details>
 
