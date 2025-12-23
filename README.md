@@ -44,6 +44,8 @@ cd /path/to/dotfiles
 - Copies `tmux/tmux.conf` to `~/.tmux.conf`
 - Copies `bin/` scripts to `~/.local/bin/`
 - Copies Claude Code configurations from `claude/` to `~/.claude/` (includes CLAUDE.md, commands, skills)
+- Clones Anthropic official skills repository to `~/.local/share/anthropics-skills/`
+- Installs all Anthropic official skills to `~/.claude/skills/` (preserves user customizations)
 - Preserves local overrides (`~/.zshrc.local`, `~/.config/nvim/lua/local.lua`) if they exist
 - Clones Zsh plugins to `~/.local/share/zsh-plugins/`
 - Installs nvm + Node 22 + tree-sitter-cli
@@ -78,7 +80,8 @@ dotfiles/
 ├── claude/              # Claude Code configuration backups
 │   ├── CLAUDE.md        # Global Claude Code instructions
 │   ├── commands/        # Custom slash commands
-│   └── skills/          # Custom Claude Code skills
+│   └── skills/          # Custom Claude Code skills (user-created)
+│       └── beamer-presentation/  # Example: Markdown to LaTeX Beamer converter
 ├── nvim/                # Neovim configuration
 │   ├── init.lua         # Main Neovim config (LSP, plugins, keymaps)
 │   └── lua/             # Lua modules for local overrides
@@ -1172,6 +1175,78 @@ rm -f ~/.cargo/bin/uv     # Older versions
 # Change shell back to bash (optional)
 chsh -s $(which bash)
 ```
+
+---
+
+## Anthropic Skills Management
+
+### Installed Skills
+
+The bootstrap script automatically installs all official skills from the [Anthropic Skills Repository](https://github.com/anthropics/skills) to `~/.claude/skills/`.
+
+**Installed skills include:**
+- **Document Skills**: DOCX, PDF, PPTX, XLSX manipulation (production-ready)
+- **Development Skills**: Testing tools, MCP server generation
+- **Creative Skills**: Art, music, design applications
+- **Enterprise Skills**: Communications, branding workflows
+
+### Updating Skills
+
+To update to the latest official skills:
+
+```bash
+# Step 1: Pull latest changes from Anthropic repository
+cd ~/.local/share/anthropics-skills
+git pull origin main
+
+# Step 2: Re-run bootstrap to install new/updated skills
+cd ~/dotfiles  # Or wherever your dotfiles are located
+./bootstrap.sh
+```
+
+**Note**: User-created skills (e.g., `beamer-presentation`) will not be overwritten during updates.
+
+### Removing Official Skills
+
+If you want to remove a specific official skill:
+
+```bash
+# Remove the skill directory
+rm -rf ~/.claude/skills/<skill-name>
+
+# Example: Remove the 'docx' skill
+rm -rf ~/.claude/skills/docx
+```
+
+### Creating Custom Skills
+
+To create your own skill:
+
+1. Create a directory in `~/.claude/skills/`:
+   ```bash
+   mkdir -p ~/.claude/skills/my-custom-skill
+   ```
+
+2. Create a `SKILL.md` file with YAML frontmatter:
+   ```markdown
+   ---
+   name: my-custom-skill
+   description: Description of what this skill does
+   ---
+
+   # My Custom Skill
+
+   [Instructions for Claude when this skill is active]
+   ```
+
+3. Backup to dotfiles repository:
+   ```bash
+   cp -r ~/.claude/skills/my-custom-skill ~/dotfiles/claude/skills/
+   git add ~/dotfiles/claude/skills/my-custom-skill
+   git commit -m ":sparkles: Add my-custom-skill"
+   ```
+
+**Tip**: Use a unique prefix for custom skills (e.g., `custom-*` or `myname-*`) to avoid conflicts with future official skills.
 
 ---
 

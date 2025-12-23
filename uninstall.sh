@@ -48,6 +48,7 @@ ITEMS_TO_REMOVE=(
   "$HOME/.local/share/zsh-plugins:Zsh plugins directory"
   "$HOME/.nvm:Node Version Manager"
   "$HOME/.config/gen-cc:gen-cc templates directory"
+  "$HOME/.local/share/anthropics-skills:Anthropic Skills repository"
 )
 
 # ============================

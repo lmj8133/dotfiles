@@ -157,6 +157,50 @@ cp -r ./claude/* "$HOME/.claude/"
 echo "[INFO] Copied ./claude/* -> ~/.claude/"
 
 # ============================
+#  Anthropic Skills Repository
+# ============================
+# Repository: https://github.com/anthropics/skills
+# Clone location: ~/.local/share/anthropics-skills
+# Installation: ~/.claude/skills/
+# Update strategy: git pull in clone location + re-run bootstrap.sh
+ANTHROPICS_SKILLS_DIR="$HOME/.local/share/anthropics-skills"
+mkdir -p "$HOME/.local/share"
+
+# Clone anthropics/skills repository
+cd "$HOME/.local/share"
+clone_if_missing "https://github.com/anthropics/skills.git" "anthropics-skills"
+cd - > /dev/null
+
+# Copy official skills to ~/.claude/skills/ (preserve user customizations)
+if [[ -d "$ANTHROPICS_SKILLS_DIR/skills" ]]; then
+  echo "[INFO] Installing Anthropic official skills to ~/.claude/skills/"
+
+  INSTALLED_COUNT=0
+  SKIPPED_COUNT=0
+
+  for skill_dir in "$ANTHROPICS_SKILLS_DIR/skills"/*; do
+    if [[ -d "$skill_dir" && -f "$skill_dir/SKILL.md" ]]; then
+      skill_name=$(basename "$skill_dir")
+      target_dir="$HOME/.claude/skills/$skill_name"
+
+      # Skip if user already has this skill (preserve customizations)
+      if [[ -d "$target_dir" ]]; then
+        echo "[INFO] $skill_name already exists, skip (preserving user version)"
+        ((++SKIPPED_COUNT))
+      else
+        cp -r "$skill_dir" "$target_dir"
+        echo "[INFO] Installed skill: $skill_name"
+        ((++INSTALLED_COUNT))
+      fi
+    fi
+  done
+
+  echo "[INFO] Installed $INSTALLED_COUNT official skills ($SKIPPED_COUNT skipped)"
+else
+  echo "[WARN] Anthropic skills repository not found at $ANTHROPICS_SKILLS_DIR, skip skill installation"
+fi
+
+# ============================
 #  Zsh plugins
 # ============================
 PLUG_DIR="$HOME/.local/share/zsh-plugins"
@@ -165,13 +209,19 @@ cd "$PLUG_DIR"
 
 clone_if_missing () {
   local repo_url="$1"
+  local custom_dir="${2:-}"  # Optional second argument
   local dir_name
-  dir_name="$(basename "$repo_url" .git)"
+
+  if [[ -n "$custom_dir" ]]; then
+    dir_name="$custom_dir"
+  else
+    dir_name="$(basename "$repo_url" .git)"
+  fi
 
   if [[ -d "$dir_name" ]]; then
     echo "[INFO] $dir_name already exists, skip clone"
   else
-    git clone --depth=1 "$repo_url"
+    git clone --depth=1 "$repo_url" "$dir_name"
   fi
 }
 
@@ -263,6 +313,7 @@ echo
 echo "===================================="
 echo "[DONE] Environment setup finished."
 echo " - Neovim / Zsh / plugins installed"
+echo " - Claude Code configs + Anthropic skills"
 echo " - nvm + Node 22 + tree-sitter-cli"
 echo " - emojify (git log emoji renderer)"
 echo " - uv (Python toolchain)"
