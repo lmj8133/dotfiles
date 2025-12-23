@@ -13,29 +13,182 @@ fi
 echo "[INFO] Using SUDO='${SUDO}'"
 
 # ============================
+#  Package Manager Detection
+# ============================
+detect_package_manager() {
+  # Detect package manager by priority order
+  if command -v brew &>/dev/null; then
+    echo "brew"
+  elif command -v apt-get &>/dev/null; then
+    echo "apt"
+  elif command -v dnf &>/dev/null; then
+    echo "dnf"
+  elif command -v yum &>/dev/null; then
+    echo "yum"
+  elif command -v pacman &>/dev/null; then
+    echo "pacman"
+  elif command -v zypper &>/dev/null; then
+    echo "zypper"
+  elif command -v apk &>/dev/null; then
+    echo "apk"
+  else
+    echo "[ERROR] No supported package manager found" >&2
+    exit 1
+  fi
+}
+
+PKG_MANAGER=$(detect_package_manager)
+echo "[INFO] Detected package manager: $PKG_MANAGER"
+
+# ============================
 #  Helper functions
 # ============================
 check_package() {
-  dpkg -l "$1" 2>/dev/null | grep -q "^ii  $1 "
+  local pkg="$1"
+  case "$PKG_MANAGER" in
+    apt)
+      dpkg -l "$pkg" 2>/dev/null | grep -q "^ii  $pkg "
+      ;;
+    brew)
+      brew list "$pkg" &>/dev/null
+      ;;
+    dnf|yum)
+      rpm -q "$pkg" &>/dev/null
+      ;;
+    pacman)
+      pacman -Q "$pkg" &>/dev/null
+      ;;
+    zypper)
+      zypper se --installed-only "$pkg" 2>/dev/null | grep -q "^i"
+      ;;
+    apk)
+      apk info -e "$pkg" &>/dev/null
+      ;;
+  esac
+}
+
+get_package_list() {
+  case "$PKG_MANAGER" in
+    apt)
+      echo "neovim curl wget git zsh build-essential libssl-dev clangd locales zoxide fzf fd-find ripgrep gh tmux bear unzip"
+      ;;
+    brew)
+      echo "neovim curl wget git zsh openssl llvm zoxide fzf fd ripgrep gh tmux bear unzip"
+      ;;
+    dnf)
+      # Note: zoxide needs manual installation, skipped here
+      echo "neovim curl wget git zsh @development-tools openssl-devel clang-tools-extra fzf fd-find ripgrep tmux bear unzip glibc-langpack-en"
+      ;;
+    yum)
+      # Note: zoxide, gh need manual installation, skipped here
+      echo "neovim curl wget git zsh @development-tools openssl-devel clang-tools-extra fzf ripgrep tmux bear unzip"
+      ;;
+    pacman)
+      echo "neovim curl wget git zsh base-devel openssl clang zoxide fzf fd ripgrep github-cli tmux bear unzip"
+      ;;
+    zypper)
+      # Note: zoxide, gh need manual installation, skipped here
+      echo "neovim curl wget git zsh -devel_basis libopenssl-devel clang fzf fd ripgrep tmux bear unzip glibc-locale"
+      ;;
+    apk)
+      # Note: bear is less commonly used on Alpine, skipped
+      echo "neovim curl wget git zsh build-base openssl-dev clang fzf fd ripgrep github-cli tmux unzip"
+      ;;
+  esac
+}
+
+install_packages() {
+  local packages=("$@")
+
+  case "$PKG_MANAGER" in
+    apt)
+      # Special handling for Ubuntu PPA (for latest neovim)
+      if grep -q "Ubuntu" /etc/os-release 2>/dev/null; then
+        # Install software-properties-common if not present
+        if ! dpkg -l software-properties-common 2>/dev/null | grep -q "^ii"; then
+          $SUDO apt-get update
+          $SUDO apt-get install -y software-properties-common
+        fi
+        echo "[INFO] Adding Neovim PPA for latest version..."
+        $SUDO add-apt-repository -y ppa:neovim-ppa/unstable
+      fi
+      $SUDO apt-get update
+      $SUDO apt-get install -y "${packages[@]}"
+      ;;
+    brew)
+      # Brew doesn't need sudo and auto-updates on install
+      brew install "${packages[@]}"
+      ;;
+    dnf)
+      $SUDO dnf install -y epel-release || true
+      $SUDO dnf check-update || true
+      # Handle group packages separately
+      local regular_pkgs=()
+      local has_dev_tools=false
+      for pkg in "${packages[@]}"; do
+        if [[ "$pkg" == "@development-tools" ]]; then
+          has_dev_tools=true
+        else
+          regular_pkgs+=("$pkg")
+        fi
+      done
+      [[ "$has_dev_tools" == true ]] && $SUDO dnf groupinstall -y "Development Tools"
+      [[ ${#regular_pkgs[@]} -gt 0 ]] && $SUDO dnf install -y "${regular_pkgs[@]}"
+      ;;
+    yum)
+      $SUDO yum install -y epel-release || true
+      $SUDO yum check-update || true
+      local regular_pkgs=()
+      local has_dev_tools=false
+      for pkg in "${packages[@]}"; do
+        if [[ "$pkg" == "@development-tools" ]]; then
+          has_dev_tools=true
+        else
+          regular_pkgs+=("$pkg")
+        fi
+      done
+      [[ "$has_dev_tools" == true ]] && $SUDO yum groupinstall -y "Development Tools"
+      [[ ${#regular_pkgs[@]} -gt 0 ]] && $SUDO yum install -y "${regular_pkgs[@]}"
+      ;;
+    pacman)
+      $SUDO pacman -Sy
+      # Handle base-devel separately
+      local regular_pkgs=()
+      local has_base_devel=false
+      for pkg in "${packages[@]}"; do
+        if [[ "$pkg" == "base-devel" ]]; then
+          has_base_devel=true
+        else
+          regular_pkgs+=("$pkg")
+        fi
+      done
+      [[ "$has_base_devel" == true ]] && $SUDO pacman -S --noconfirm --needed base-devel
+      [[ ${#regular_pkgs[@]} -gt 0 ]] && $SUDO pacman -S --noconfirm --needed "${regular_pkgs[@]}"
+      ;;
+    zypper)
+      $SUDO zypper refresh
+      $SUDO zypper install -y "${packages[@]}"
+      ;;
+    apk)
+      $SUDO apk update
+      $SUDO apk add "${packages[@]}"
+      ;;
+  esac
 }
 
 # ============================
-#  APT: Neovim / Zsh / tools
+#  Package Installation
 # ============================
-# 有些系統 add-apt-repository 不一定有，要先裝 software-properties-common
 echo "[INFO] Checking package installation status..."
 
-# Define all packages to install
-PACKAGES=(
-  neovim curl wget git zsh build-essential libssl-dev
-  clangd locales zoxide fzf fd-find ripgrep gh tmux bear unzip
-)
+# Get package list for current package manager
+read -ra ALL_PACKAGES <<< "$(get_package_list)"
 
 # Check which packages are already installed
 PACKAGES_TO_INSTALL=()
 PACKAGES_ALREADY_INSTALLED=()
 
-for pkg in "${PACKAGES[@]}"; do
+for pkg in "${ALL_PACKAGES[@]}"; do
   if check_package "$pkg"; then
     PACKAGES_ALREADY_INSTALLED+=("$pkg")
   else
@@ -49,24 +202,10 @@ if [[ ${#PACKAGES_ALREADY_INSTALLED[@]} -gt 0 ]]; then
 fi
 
 if [[ ${#PACKAGES_TO_INSTALL[@]} -eq 0 ]]; then
-  echo "[INFO] All packages already installed, skipping apt-get install"
+  echo "[INFO] All packages already installed, skipping installation"
 else
   echo "[INFO] Need to install (${#PACKAGES_TO_INSTALL[@]}): ${PACKAGES_TO_INSTALL[*]}"
-
-  # Install software-properties-common if needed
-  if ! check_package "software-properties-common"; then
-    $SUDO apt-get update
-    $SUDO apt-get install -y software-properties-common
-  fi
-
-  # Add Neovim PPA if neovim needs to be installed
-  if [[ " ${PACKAGES_TO_INSTALL[*]} " =~ " neovim " ]]; then
-    echo "[INFO] Adding Neovim PPA..."
-    $SUDO add-apt-repository -y ppa:neovim-ppa/unstable
-  fi
-
-  $SUDO apt-get update
-  $SUDO apt-get install -y "${PACKAGES_TO_INSTALL[@]}"
+  install_packages "${PACKAGES_TO_INSTALL[@]}"
   echo "[INFO] Package installation completed"
 fi
 
@@ -304,10 +443,12 @@ else
 fi
 
 # ============================
-#  Locale
+#  Locale (apt systems only)
 # ============================
-$SUDO locale-gen en_US.UTF-8
-$SUDO update-locale LANG=en_US.UTF-8
+if [[ "$PKG_MANAGER" == "apt" ]]; then
+  $SUDO locale-gen en_US.UTF-8
+  $SUDO update-locale LANG=en_US.UTF-8
+fi
 
 echo
 echo "===================================="
