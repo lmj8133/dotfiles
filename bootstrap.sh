@@ -97,6 +97,24 @@ get_package_list() {
   esac
 }
 
+clone_if_missing() {
+  local repo_url="$1"
+  local custom_dir="${2:-}"  # Optional second argument
+  local dir_name
+
+  if [[ -n "$custom_dir" ]]; then
+    dir_name="$custom_dir"
+  else
+    dir_name="$(basename "$repo_url" .git)"
+  fi
+
+  if [[ -d "$dir_name" ]]; then
+    echo "[INFO] $dir_name already exists, skip clone"
+  else
+    git clone --depth=1 "$repo_url" "$dir_name"
+  fi
+}
+
 install_packages() {
   local packages=("$@")
 
@@ -345,24 +363,6 @@ fi
 PLUG_DIR="$HOME/.local/share/zsh-plugins"
 mkdir -p "$PLUG_DIR"
 cd "$PLUG_DIR"
-
-clone_if_missing () {
-  local repo_url="$1"
-  local custom_dir="${2:-}"  # Optional second argument
-  local dir_name
-
-  if [[ -n "$custom_dir" ]]; then
-    dir_name="$custom_dir"
-  else
-    dir_name="$(basename "$repo_url" .git)"
-  fi
-
-  if [[ -d "$dir_name" ]]; then
-    echo "[INFO] $dir_name already exists, skip clone"
-  else
-    git clone --depth=1 "$repo_url" "$dir_name"
-  fi
-}
 
 clone_if_missing "https://github.com/romkatv/powerlevel10k.git"
 clone_if_missing "https://github.com/zsh-users/zsh-autosuggestions.git"
