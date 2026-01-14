@@ -207,7 +207,7 @@ require("lazy").setup({
       require("mason-lspconfig").setup({
         ensure_installed = {
           "pyright","lua_ls","clangd","rust_analyzer","ts_ls",  -- 已更新：tsserver → ts_ls
-          "texlab","marksman",
+          "texlab","marksman","jsonls",
           -- gopls 已移除：如需 Go 支援，請手動執行 :MasonInstall gopls
         }
       })
@@ -298,12 +298,12 @@ require("lazy").setup({
         },
       })
 
-      for _, server in ipairs({ "pyright","lua_ls","clangd","rust_analyzer","ts_ls","marksman" }) do
+      for _, server in ipairs({ "pyright","lua_ls","clangd","rust_analyzer","ts_ls","marksman","jsonls" }) do
         lspconfig[server].setup({ capabilities = capabilities })
       end
 
       -- Neovim 0.11+ requires explicit LSP enable
-      vim.lsp.enable({ "pyright", "lua_ls", "clangd", "rust_analyzer", "ts_ls", "marksman" })
+      vim.lsp.enable({ "pyright", "lua_ls", "clangd", "rust_analyzer", "ts_ls", "marksman", "jsonls" })
 
       lspconfig.texlab.setup({
         capabilities = capabilities,
@@ -351,7 +351,7 @@ require("lazy").setup({
         mapping = cmp.mapping.preset.insert({
           ['<C-b>'] = cmp.mapping.scroll_docs(-4),
           ['<C-f>'] = cmp.mapping.scroll_docs(4),
-          ['<C-Space>'] = cmp.mapping.complete(),
+          ['<C-y>'] = cmp.mapping.complete(),
           ['<C-e>'] = cmp.mapping.abort(),
           ['<CR>'] = cmp.mapping.confirm({ select = true }),
           ['<Tab>'] = cmp.mapping(function(fallback)
