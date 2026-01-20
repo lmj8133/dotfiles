@@ -32,30 +32,7 @@
 * Never include **secrets/tokens/PII** in code, samples, logs, or diffs.
 * Clearly flag **risky/destructive** operations (e.g., `sudo`, prod DB writes, mass file edits) and suggest **dry‑runs/backouts**.
 
-## 5) Git Commit Rules (text gitmoji)
-
-* **Title format**: `<gitmoji> <Description>` (imperative, headline capitalization; **English**).
-* **Body**: **one concise bullet per feature**; focus on **what/why** (not how); wrap at \~72 chars.
-* **Allowed text gitmoji**:
-  `:sparkles:` New features · `:bug:` Bug fixes · `:recycle:` Refactors · `:art:` Structure/format · `:memo:` Docs · `:white_check_mark:` Tests · `:fire:` Remove code/files · `:arrow_up:` Upgrade deps · `:arrow_down:` Downgrade deps · `:wrench:` Config · `:zap:` Performance · `:construction:` WIP · `:rocket:` Deploy · `:lipstick:` UI/styling · `:heavy_plus_sign:` Add deps · `:heavy_minus_sign:` Remove deps · `:lock:` Security · `:ambulance:` Critical hotfix · `:construction_worker:` CI/build · `:green_heart:` Fix CI.
-
-**Example (English commit message)**
-
-```
-:sparkles: Add crosshair auxiliary lines for drawing mode
-
-- Display crosshair guides for precise bbox alignment
-```
-
-## 6) Review Checklist (self/peer)
-
-* [ ] Names are clear; functions/classes are focused and small
-* [ ] Edge cases handled; errors are helpful and include context
-* [ ] Tests exist & are easy to run; CI steps documented
-* [ ] No secrets in code/logs; configs are externalized
-* [ ] Docs updated (README, usage notes, migration steps)
-
-## 7) Tooling Preferences
+## 5) Tooling Preferences
 
 * **Python (uv toolchain)**
 
@@ -64,7 +41,7 @@
 * **Node/JS**: provide `npm run build`, `npm test`, and `lint` examples when relevant.
 * **Cross‑platform**: keep shell commands copy‑pasteable across macOS/Linux/WSL; note platform caveats.
 
-## 8) Claude Code Interaction Habits
+## 6) Claude Code Interaction Habits
 
 * When code is requested, provide **complete, runnable** snippets (**English**) with minimal prerequisites.
 * Offer **sane defaults**; separate **must‑set** from **optional** settings.
@@ -72,12 +49,12 @@
 * Use headings, lists, and short paragraphs; **avoid filler**.
 * Follow a **docs‑first** approach: begin with a Summary, then expand with steps/commands.
 
-## 9) Project‑Local Overrides
+## 7) Project‑Local Overrides
 
 * Repos may include their own `CLAUDE.md` and `.claude/settings*` to refine/override these global defaults.
 * When composing answers, reference project docs via imports when available (e.g., `@README`, `@CONTRIBUTING`).
 
-## 10) Documentation & Examples
+## 8) Documentation & Examples
 
 * Each feature/change should include **usage notes** or a **short example**.
 * For CLI tools, show both a **one‑liner** and a **full** example; include exit codes when relevant.
