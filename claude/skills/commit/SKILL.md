@@ -101,3 +101,5 @@ git status  # verify
 - **Never skip** `git diff` step
 - **Commit message is for "future me"**: include enough context to recall
   what this version changed without re-reading the code
+- **Never add** `Co-Authored-By`, `Co-authored-by`, or similar AI attribution
+  trailers to commit messages
