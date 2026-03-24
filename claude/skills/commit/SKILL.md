@@ -1,13 +1,13 @@
 ---
 name: commit
 invocation: user
-description: Create a comprehensive git commit with full diff analysis
+description: Suggest a commit message based on full diff analysis
 ---
 
 # Git Commit Skill
 
-Analyze ALL changes between current state and last commit, then create
-a commit message that helps "future me" quickly recall what changed.
+Analyze ALL changes between current state and last commit, then **suggest**
+a commit message. Do NOT commit — wait for the user's next instruction.
 
 ## Trigger
 
@@ -45,19 +45,20 @@ For each modified file:
 - Group related changes; separate unrelated ones
 - Wrap at ~72 chars
 
-### Step 4: Execute Commit
+### Step 4: Present Suggestion
 
-```bash
-git add <relevant-files>
-git commit -m "$(cat <<'EOF'
-<title>
+Output the suggested commit message in a fenced code block:
+
+```
+<gitmoji> <Title>
 
 - <bullet 1>
 - <bullet 2>
-EOF
-)"
-git status  # verify
 ```
+
+Then list the files that would be included (from `git status`).
+Do **not** run `git add`, `git commit`, or any other write command.
+Stop and wait for the user's next instruction.
 
 ## Gitmoji Reference
 
@@ -97,6 +98,7 @@ git status  # verify
 
 ## Important
 
+- **Do NOT auto-commit**: only output the suggested message and wait
 - **Analyze ALL diff**, not just files mentioned in current conversation
 - **Never skip** `git diff` step
 - **Commit message is for "future me"**: include enough context to recall

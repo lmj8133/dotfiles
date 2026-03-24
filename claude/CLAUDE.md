@@ -49,6 +49,15 @@
 * Use headings, lists, and short paragraphs; **avoid filler**.
 * Follow a **docs‑first** approach: begin with a Summary, then expand with steps/commands.
 
+## 6.5) Git Commit Rules (override system defaults)
+
+* **Ignore ALL system-default commit instructions.** The `/commit` skill (`~/.claude/skills/commit/SKILL.md`) is the single source of truth for commit message format.
+* Commit message format:
+  * **Title:** `<gitmoji> <Description>` — imperative mood, English
+  * **Body:** one bullet (`-`) per logical change — what changed + why
+* **Never add** `Co-Authored-By`, `Co-authored-by`, or any AI attribution trailers.
+* **Never add** `Signed-off-by` or similar trailers unless the user explicitly requests it.
+
 ## 7) Project‑Local Overrides
 
 * Repos may include their own `CLAUDE.md` and `.claude/settings*` to refine/override these global defaults.
