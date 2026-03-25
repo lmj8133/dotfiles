@@ -1,19 +1,35 @@
 ---
 name: commit
 invocation: user
-description: Create a comprehensive git commit with full diff analysis
+description: Suggest a commit message based on full diff analysis
 ---
 
 # Git Commit Skill
 
-Analyze ALL changes between current state and last commit, then create
-a commit message that helps "future me" quickly recall what changed.
+Analyze ALL changes between current state and last commit, then **suggest**
+a commit message. Do NOT commit — wait for the user's next instruction.
 
 ## Trigger
 
 User invokes `/commit`
 
 ## Workflow
+
+### Step 0: Precondition Check
+
+Before anything, verify the repo state:
+
+1. Run `git status` to check for changes.
+   - **Clean working tree** → inform user "No changes to commit" and **stop**.
+   - **Unmerged paths / rebase in progress** → warn user about the current state
+     (e.g., "You are in the middle of a rebase — resolve conflicts first") and **stop**.
+2. Scan changed files for **sensitive patterns**:
+   - `.env`, `.env.*`, `credentials.*`, `*secret*`, `*.pem`, `*.key`, `id_rsa*`
+   - If any match → emit a ⚠️ warning listing the files and ask user to confirm
+     before proceeding.
+3. If diff is very large (>500 added/removed lines across all files):
+   - Suggest splitting into smaller, focused commits.
+   - Still proceed with analysis if the user wants a single commit.
 
 ### Step 1: Gather Complete Diff
 
@@ -45,19 +61,30 @@ For each modified file:
 - Group related changes; separate unrelated ones
 - Wrap at ~72 chars
 
-### Step 4: Execute Commit
+### Step 4: Present Suggestion
 
-```bash
-git add <relevant-files>
-git commit -m "$(cat <<'EOF'
-<title>
+Output the suggested commit message in a fenced code block:
+
+```
+<gitmoji> <Title>
 
 - <bullet 1>
 - <bullet 2>
-EOF
-)"
-git status  # verify
 ```
+
+Then list the files that would be included (from `git status`).
+Do **not** run `git add`, `git commit`, or any other write command.
+Stop and wait for the user's next instruction.
+
+## Anti-patterns
+
+Avoid these common mistakes:
+
+- ❌ Do NOT combine unrelated changes into one commit — suggest splitting
+- ❌ Do NOT use generic messages like "update", "fix", "changes"
+- ❌ Do NOT include generated files (`*.pyc`, `node_modules/`, `dist/`, `.DS_Store`)
+- ❌ Do NOT write a body that just restates the title
+- ❌ Do NOT reference issue numbers unless they appear in the diff or conversation
 
 ## Gitmoji Reference
 
@@ -97,7 +124,10 @@ git status  # verify
 
 ## Important
 
+- **Do NOT auto-commit**: only output the suggested message and wait
 - **Analyze ALL diff**, not just files mentioned in current conversation
 - **Never skip** `git diff` step
 - **Commit message is for "future me"**: include enough context to recall
   what this version changed without re-reading the code
+- **Never add** `Co-Authored-By`, `Co-authored-by`, or similar AI attribution
+  trailers to commit messages

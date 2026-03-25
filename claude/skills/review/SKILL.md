@@ -12,7 +12,32 @@ Perform a systematic review of recent changes before commit or PR.
 
 User invokes `/review`
 
+## Severity Levels
+
+Use these levels to categorize every finding:
+
+| Level | Label | Meaning |
+|-------|-------|---------|
+| 🔴 | **BLOCKER** | Security issues, data loss risks, broken tests, crashes |
+| 🟡 | **WARNING** | Missing error handling, unclear naming, poor patterns |
+| 🟢 | **SUGGESTION** | Style improvements, docs, minor refactoring opportunities |
+
 ## Workflow
+
+### Step 0: Detect Project Type
+
+Check for marker files to determine the project language(s):
+
+| Marker File | Language | Automated Tools |
+|-------------|----------|-----------------|
+| `pyproject.toml`, `setup.py`, `requirements.txt` | Python | `uvx ruff check .`, `uvx ruff format --check .`, `uvx mypy .`, `pytest -q` |
+| `package.json` | Node/JS/TS | `npm run lint`, `npm test` |
+| `go.mod` | Go | `go vet ./...`, `go test ./...` |
+| `Cargo.toml` | Rust | `cargo clippy`, `cargo test` |
+| `*.sh` (in changed files) | Shell | `shellcheck` |
+
+If multiple markers exist, run checks for **all** detected languages.
+For language-specific manual checklists, read `references/checklists.md`.
 
 ### Step 1: Identify Changed Files
 
@@ -23,21 +48,8 @@ git diff --cached --name-only # staged
 
 ### Step 2: Run Automated Checks
 
-Based on project type, run appropriate tools:
-
-**Python:**
-```bash
-uvx ruff check .
-uvx mypy .
-pytest -q
-```
-
-**Node/JS:**
-```bash
-npm run lint
-npm run typecheck  # if available
-npm test
-```
+Run the tools identified in Step 0. If a tool is not installed or the
+corresponding npm script doesn't exist, note it and move on.
 
 ### Step 3: Manual Checklist
 
@@ -49,43 +61,48 @@ For each changed file, verify:
 - [ ] **Security**: No secrets in code/logs; configs externalized
 - [ ] **Docs**: README/usage notes updated if needed
 
+For deeper language-specific checks, consult `references/checklists.md`.
+
 ### Step 4: Report
 
-Output a summary:
-- Files reviewed
-- Automated check results
-- Manual checklist findings
-- Suggestions for improvement
-
-## Example Output
+Output a structured summary using severity levels:
 
 ```
 ## Review Summary
 
-### Files Changed (3)
+### Project Type
+- Python (detected via pyproject.toml)
+
+### Files Changed (N)
 - src/utils/parser.py (modified)
 - src/utils/validator.py (new)
 - tests/test_parser.py (modified)
 
 ### Automated Checks
 - ruff: PASS (0 issues)
-- mypy: PASS (0 errors)
 - pytest: PASS (12 tests)
 
-### Manual Checklist
+### Findings
+
+🔴 **BLOCKER**: API key hardcoded in config.py:23
+   → Move to environment variable or .env (add to .gitignore)
+
+🟡 **WARNING**: `validate_input()` missing error handling for empty string
+   → Add guard clause or raise ValueError with context
+
+🟢 **SUGGESTION**: Consider adding docstring to `parse_header()` function
+
+### Checklist
 - [x] Naming: Clear and descriptive
 - [x] Error handling: ValidationError with context
 - [x] Tests: Added 3 new test cases
 - [ ] Docs: README needs update for new validator API
-
-### Suggestions
-1. Consider adding docstring to `validate_input()` function
-2. README.md should document the new validator module
 ```
 
 ## Important
 
 - **Review ALL changed files**, not just those mentioned in conversation
 - **Run automated tools first** to catch obvious issues
+- **Categorize every finding** with a severity level (🔴/🟡/🟢)
 - **Be constructive**: focus on improvements, not criticism
 - **Skip steps** if not applicable (e.g., no tests for doc-only changes)

@@ -4,13 +4,69 @@ set -euo pipefail
 # ============================
 #  Basic: sudo / root handling
 # ============================
-if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-  SUDO=sudo
+
+# Check if sudo is available and working
+check_sudo_available() {
+  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+    return 0  # Already root
+  fi
+  if ! command -v sudo &>/dev/null; then
+    return 1
+  fi
+  # Non-interactive test (cached credentials or NOPASSWD)
+  if sudo -n true 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+HAS_SUDO=false
+if check_sudo_available; then
+  HAS_SUDO=true
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    SUDO=sudo
+  else
+    SUDO=
+  fi
 else
   SUDO=
 fi
 
-echo "[INFO] Using SUDO='${SUDO}'"
+echo "[INFO] sudo available: $HAS_SUDO (SUDO='${SUDO}')"
+
+# ============================
+#  Architecture Detection (lazy — resolved when needed)
+# ============================
+detect_arch() {
+  local arch
+  arch=$(uname -m)
+  case "$arch" in
+    x86_64|amd64)   echo "x86_64" ;;
+    aarch64|arm64)   echo "aarch64" ;;
+    *)
+      echo "[ERROR] Unsupported architecture: $arch" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Resolved lazily in install_packages_nosudo; not needed for sudo path
+ARCH=""
+
+# ============================
+#  Binary version pins (for no-sudo installation)
+# ============================
+NEOVIM_VERSION="v0.10.4"
+FZF_VERSION="0.60.3"
+FD_VERSION="v10.2.0"
+RIPGREP_VERSION="14.1.1"
+ZOXIDE_VERSION="v0.9.7"
+GH_VERSION="2.67.0"
+CLANGD_VERSION="19.1.2"
+TMUX_VERSION="3.5a"
+ZSH_VERSION_PIN="5.9"
+LIBEVENT_VERSION="2.1.12-stable"
+NCURSES_VERSION="6.5"
 
 # ============================
 #  Package Manager Detection
@@ -115,6 +171,379 @@ clone_if_missing() {
   fi
 }
 
+# ============================
+#  No-sudo installation helpers
+# ============================
+
+# Download and extract a prebuilt binary to ~/.local/bin
+# Usage: download_and_install_binary <url> <binary_name>
+download_and_install_binary() {
+  local url="$1"
+  local binary_name="$2"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  local target_dir="$HOME/.local/bin"
+
+  mkdir -p "$target_dir"
+  echo "[INFO] Downloading $binary_name ..."
+
+  local filename
+  filename=$(basename "$url")
+
+  if [[ "$filename" == *.tar.gz || "$filename" == *.tgz ]]; then
+    curl -fsSL "$url" | tar xz -C "$tmp_dir"
+  elif [[ "$filename" == *.tar.xz ]]; then
+    curl -fsSL "$url" | tar xJ -C "$tmp_dir"
+  elif [[ "$filename" == *.zip ]]; then
+    curl -fsSL "$url" -o "$tmp_dir/$filename"
+    unzip -q "$tmp_dir/$filename" -d "$tmp_dir"
+  else
+    # Assume single binary
+    curl -fsSL "$url" -o "$tmp_dir/$binary_name"
+  fi
+
+  # Find the binary in extracted content
+  local found_binary
+  found_binary=$(find "$tmp_dir" -name "$binary_name" -type f 2>/dev/null | head -1)
+
+  if [[ -n "$found_binary" ]]; then
+    cp "$found_binary" "$target_dir/$binary_name"
+    chmod +x "$target_dir/$binary_name"
+    echo "[INFO] Installed $binary_name -> $target_dir/$binary_name"
+  else
+    echo "[WARN] Could not find $binary_name in downloaded archive from $url"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  rm -rf "$tmp_dir"
+}
+
+# Install Neovim from GitHub release (needs full runtime directory)
+install_neovim_nosudo() {
+  local nvim_arch_suffix
+  case "$ARCH" in
+    x86_64)  nvim_arch_suffix="linux-x86_64" ;;
+    aarch64) nvim_arch_suffix="linux-arm64" ;;
+  esac
+  local url="https://github.com/neovim/neovim/releases/download/${NEOVIM_VERSION}/nvim-${nvim_arch_suffix}.tar.gz"
+  local install_dir="$HOME/.local/share/nvim-install"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+
+  echo "[INFO] Installing Neovim ${NEOVIM_VERSION} (no-sudo) ..."
+  curl -fsSL "$url" | tar xz -C "$tmp_dir"
+
+  local extracted_dir
+  extracted_dir=$(find "$tmp_dir" -maxdepth 1 -type d -name "nvim-*" | head -1)
+
+  if [[ -z "$extracted_dir" ]]; then
+    echo "[ERROR] Failed to extract Neovim archive"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  rm -rf "$install_dir"
+  mv "$extracted_dir" "$install_dir"
+  rm -rf "$tmp_dir"
+
+  mkdir -p "$HOME/.local/bin"
+  ln -sf "$install_dir/bin/nvim" "$HOME/.local/bin/nvim"
+  echo "[INFO] Neovim installed -> ~/.local/bin/nvim"
+}
+
+# Install clangd from GitHub release
+install_clangd_nosudo() {
+  local url="https://github.com/clangd/clangd/releases/download/${CLANGD_VERSION}/clangd-linux-${CLANGD_VERSION}.zip"
+  local install_dir="$HOME/.local/share/clangd-install"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+
+  echo "[INFO] Installing clangd ${CLANGD_VERSION} (no-sudo) ..."
+
+  if ! command -v unzip &>/dev/null; then
+    echo "[WARN] unzip required for clangd installation but not found, skip"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  curl -fsSL "$url" -o "$tmp_dir/clangd.zip"
+  unzip -q "$tmp_dir/clangd.zip" -d "$tmp_dir"
+
+  local extracted_dir
+  extracted_dir=$(find "$tmp_dir" -maxdepth 1 -type d -name "clangd_*" | head -1)
+
+  if [[ -z "$extracted_dir" ]]; then
+    echo "[ERROR] Failed to extract clangd archive"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  rm -rf "$install_dir"
+  mv "$extracted_dir" "$install_dir"
+  rm -rf "$tmp_dir"
+
+  mkdir -p "$HOME/.local/bin"
+  ln -sf "$install_dir/bin/clangd" "$HOME/.local/bin/clangd"
+  echo "[INFO] clangd installed -> ~/.local/bin/clangd"
+}
+
+# Build tmux from source with dependencies (libevent + ncurses)
+# Runs in a subshell to isolate cd side effects
+install_tmux_nosudo() {
+  if ! command -v gcc &>/dev/null || ! command -v make &>/dev/null; then
+    echo "[WARN] gcc/make required to build tmux from source, skip"
+    return 1
+  fi
+
+  local prefix="$HOME/.local"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  local log_file="$tmp_dir/build.log"
+
+  echo "[INFO] Building tmux ${TMUX_VERSION} from source (prefix=$prefix) ..."
+
+  (
+    set -e
+
+    # Build libevent
+    echo "[INFO]   Building libevent ${LIBEVENT_VERSION} ..."
+    cd "$tmp_dir"
+    curl -fsSL "https://github.com/libevent/libevent/releases/download/release-${LIBEVENT_VERSION}/libevent-${LIBEVENT_VERSION}.tar.gz" | tar xz
+    cd "libevent-${LIBEVENT_VERSION}"
+    ./configure --prefix="$prefix" --disable-shared --disable-openssl >>"$log_file" 2>&1
+    make -j"$(nproc)" >>"$log_file" 2>&1
+    make install >>"$log_file" 2>&1
+
+    # Build ncurses (if not available)
+    if ! pkg-config --exists ncurses 2>/dev/null && ! pkg-config --exists ncursesw 2>/dev/null; then
+      echo "[INFO]   Building ncurses ${NCURSES_VERSION} ..."
+      cd "$tmp_dir"
+      curl -fsSL "https://ftp.gnu.org/gnu/ncurses/ncurses-${NCURSES_VERSION}.tar.gz" | tar xz
+      cd "ncurses-${NCURSES_VERSION}"
+      ./configure --prefix="$prefix" --with-shared --without-debug --enable-widec >>"$log_file" 2>&1
+      make -j"$(nproc)" >>"$log_file" 2>&1
+      make install >>"$log_file" 2>&1
+    fi
+
+    # Build tmux
+    echo "[INFO]   Building tmux ${TMUX_VERSION} ..."
+    cd "$tmp_dir"
+    curl -fsSL "https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz" | tar xz
+    cd "tmux-${TMUX_VERSION}"
+    PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
+    CFLAGS="-I$prefix/include -I$prefix/include/ncursesw -I$prefix/include/ncurses" \
+    LDFLAGS="-L$prefix/lib -Wl,-rpath,$prefix/lib" \
+    ./configure --prefix="$prefix" >>"$log_file" 2>&1
+    make -j"$(nproc)" >>"$log_file" 2>&1
+    make install >>"$log_file" 2>&1
+  )
+  local rc=$?
+
+  if [[ $rc -ne 0 ]]; then
+    echo "[ERROR] tmux build failed. Last 20 lines of build log:"
+    tail -20 "$log_file" 2>/dev/null
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  rm -rf "$tmp_dir"
+  echo "[INFO] tmux installed -> $prefix/bin/tmux"
+}
+
+# Build zsh from source
+# Runs in a subshell to isolate cd side effects
+install_zsh_nosudo() {
+  if ! command -v gcc &>/dev/null || ! command -v make &>/dev/null; then
+    echo "[WARN] gcc/make required to build zsh from source, skip"
+    return 1
+  fi
+
+  local prefix="$HOME/.local"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  local log_file="$tmp_dir/build.log"
+
+  echo "[INFO] Building zsh from source (prefix=$prefix) ..."
+
+  (
+    set -e
+
+    # Build ncurses if not available (shared with tmux)
+    if ! pkg-config --exists ncurses 2>/dev/null && ! pkg-config --exists ncursesw 2>/dev/null; then
+      if [[ ! -f "$prefix/lib/libncursesw.so" && ! -f "$prefix/lib/libncursesw.a" ]]; then
+        echo "[INFO]   Building ncurses ${NCURSES_VERSION} ..."
+        cd "$tmp_dir"
+        curl -fsSL "https://ftp.gnu.org/gnu/ncurses/ncurses-${NCURSES_VERSION}.tar.gz" | tar xz
+        cd "ncurses-${NCURSES_VERSION}"
+        ./configure --prefix="$prefix" --with-shared --without-debug --enable-widec >>"$log_file" 2>&1
+        make -j"$(nproc)" >>"$log_file" 2>&1
+        make install >>"$log_file" 2>&1
+      fi
+    fi
+
+    # Build zsh
+    cd "$tmp_dir"
+    curl -fsSL "https://sourceforge.net/projects/zsh/files/zsh/${ZSH_VERSION_PIN}/zsh-${ZSH_VERSION_PIN}.tar.xz/download" -o zsh.tar.xz
+    tar xJf zsh.tar.xz
+    cd "zsh-${ZSH_VERSION_PIN}"
+    CFLAGS="-I$prefix/include -I$prefix/include/ncursesw" \
+    LDFLAGS="-L$prefix/lib -Wl,-rpath,$prefix/lib" \
+    ./configure --prefix="$prefix" >>"$log_file" 2>&1
+    make -j"$(nproc)" >>"$log_file" 2>&1
+    make install >>"$log_file" 2>&1
+  )
+  local rc=$?
+
+  if [[ $rc -ne 0 ]]; then
+    echo "[ERROR] zsh build failed. Last 20 lines of build log:"
+    tail -20 "$log_file" 2>/dev/null
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  rm -rf "$tmp_dir"
+  echo "[INFO] zsh installed -> $prefix/bin/zsh"
+}
+
+# Main no-sudo installation flow
+install_packages_nosudo() {
+  local target_dir="$HOME/.local/bin"
+  mkdir -p "$target_dir"
+
+  # Resolve architecture (only needed for no-sudo binary downloads)
+  ARCH=$(detect_arch)
+  echo "[INFO] Detected architecture: $ARCH"
+
+  # Pre-check: curl is required for all downloads
+  if ! command -v curl &>/dev/null; then
+    echo "[ERROR] curl is required for no-sudo installation but not found"
+    echo "[ERROR] Please ask your system administrator to install curl"
+    exit 1
+  fi
+
+  echo "[INFO] Installing packages without sudo (prebuilt binaries + source builds)"
+
+  # --- Prebuilt binary downloads ---
+
+  # neovim
+  if ! command -v nvim &>/dev/null; then
+    install_neovim_nosudo || echo "[WARN] Neovim installation failed"
+  else
+    echo "[INFO] nvim already available, skip"
+  fi
+
+  # fzf
+  if ! command -v fzf &>/dev/null; then
+    local fzf_arch
+    case "$ARCH" in
+      x86_64)  fzf_arch="linux_amd64" ;;
+      aarch64) fzf_arch="linux_arm64" ;;
+    esac
+    download_and_install_binary \
+      "https://github.com/junegunn/fzf/releases/download/v${FZF_VERSION}/fzf-${FZF_VERSION}-${fzf_arch}.tar.gz" \
+      "fzf" || echo "[WARN] fzf installation failed"
+  else
+    echo "[INFO] fzf already available, skip"
+  fi
+
+  # fd
+  if ! command -v fd &>/dev/null && ! command -v fdfind &>/dev/null; then
+    local fd_arch
+    case "$ARCH" in
+      x86_64)  fd_arch="x86_64-unknown-linux-musl" ;;
+      aarch64) fd_arch="aarch64-unknown-linux-gnu" ;;
+    esac
+    download_and_install_binary \
+      "https://github.com/sharkdp/fd/releases/download/${FD_VERSION}/fd-${FD_VERSION}-${fd_arch}.tar.gz" \
+      "fd" || echo "[WARN] fd installation failed"
+  else
+    echo "[INFO] fd already available, skip"
+  fi
+
+  # ripgrep
+  if ! command -v rg &>/dev/null; then
+    local rg_arch
+    case "$ARCH" in
+      x86_64)  rg_arch="x86_64-unknown-linux-musl" ;;
+      aarch64) rg_arch="aarch64-unknown-linux-gnu" ;;
+    esac
+    download_and_install_binary \
+      "https://github.com/BurntSushi/ripgrep/releases/download/${RIPGREP_VERSION}/ripgrep-${RIPGREP_VERSION}-${rg_arch}.tar.gz" \
+      "rg" || echo "[WARN] ripgrep installation failed"
+  else
+    echo "[INFO] rg already available, skip"
+  fi
+
+  # zoxide
+  if ! command -v zoxide &>/dev/null; then
+    echo "[INFO] Installing zoxide via official installer ..."
+    curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh
+  else
+    echo "[INFO] zoxide already available, skip"
+  fi
+
+  # gh (GitHub CLI)
+  if ! command -v gh &>/dev/null; then
+    local gh_arch
+    case "$ARCH" in
+      x86_64)  gh_arch="linux_amd64" ;;
+      aarch64) gh_arch="linux_arm64" ;;
+    esac
+    download_and_install_binary \
+      "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_${gh_arch}.tar.gz" \
+      "gh" || echo "[WARN] gh installation failed"
+  else
+    echo "[INFO] gh already available, skip"
+  fi
+
+  # clangd
+  if ! command -v clangd &>/dev/null; then
+    install_clangd_nosudo || echo "[WARN] clangd installation failed"
+  else
+    echo "[INFO] clangd already available, skip"
+  fi
+
+  # unzip (check only — needed by clangd install above)
+  if ! command -v unzip &>/dev/null; then
+    echo "[WARN] unzip not available; some installations may be limited"
+  fi
+
+  # --- Source builds (if gcc available) ---
+
+  # tmux
+  if ! command -v tmux &>/dev/null; then
+    install_tmux_nosudo || echo "[WARN] tmux: install failed or gcc/make not available"
+  else
+    echo "[INFO] tmux already available, skip"
+  fi
+
+  # zsh
+  if ! command -v zsh &>/dev/null; then
+    install_zsh_nosudo || echo "[WARN] zsh: install failed or gcc/make not available"
+  else
+    echo "[INFO] zsh already available, skip"
+  fi
+
+  # --- Check-and-warn for essential pre-installed tools ---
+
+  for cmd in curl wget git; do
+    if ! command -v "$cmd" &>/dev/null; then
+      echo "[WARN] $cmd not found — please ask your system administrator to install it"
+    fi
+  done
+
+  # --- Skip with warning ---
+
+  if ! command -v gcc &>/dev/null; then
+    echo "[WARN] gcc (build-essential) not available — source compilation disabled"
+  fi
+
+  if ! command -v bear &>/dev/null; then
+    echo "[INFO] bear skipped in no-sudo mode (use gen-cc as alternative)"
+  fi
+}
+
 install_packages() {
   local packages=("$@")
 
@@ -199,32 +628,37 @@ install_packages() {
 # ============================
 echo "[INFO] Checking package installation status..."
 
-# Get package list for current package manager
-read -ra ALL_PACKAGES <<< "$(get_package_list)"
+if [[ "$HAS_SUDO" == true || "$PKG_MANAGER" == "brew" ]]; then
+  # --- Standard flow: use system package manager ---
+  read -ra ALL_PACKAGES <<< "$(get_package_list)"
 
-# Check which packages are already installed
-PACKAGES_TO_INSTALL=()
-PACKAGES_ALREADY_INSTALLED=()
+  PACKAGES_TO_INSTALL=()
+  PACKAGES_ALREADY_INSTALLED=()
 
-for pkg in "${ALL_PACKAGES[@]}"; do
-  if check_package "$pkg"; then
-    PACKAGES_ALREADY_INSTALLED+=("$pkg")
-  else
-    PACKAGES_TO_INSTALL+=("$pkg")
+  for pkg in "${ALL_PACKAGES[@]}"; do
+    if check_package "$pkg"; then
+      PACKAGES_ALREADY_INSTALLED+=("$pkg")
+    else
+      PACKAGES_TO_INSTALL+=("$pkg")
+    fi
+  done
+
+  if [[ ${#PACKAGES_ALREADY_INSTALLED[@]} -gt 0 ]]; then
+    echo "[INFO] Already installed (${#PACKAGES_ALREADY_INSTALLED[@]}): ${PACKAGES_ALREADY_INSTALLED[*]}"
   fi
-done
 
-# Report status
-if [[ ${#PACKAGES_ALREADY_INSTALLED[@]} -gt 0 ]]; then
-  echo "[INFO] Already installed (${#PACKAGES_ALREADY_INSTALLED[@]}): ${PACKAGES_ALREADY_INSTALLED[*]}"
-fi
-
-if [[ ${#PACKAGES_TO_INSTALL[@]} -eq 0 ]]; then
-  echo "[INFO] All packages already installed, skipping installation"
+  if [[ ${#PACKAGES_TO_INSTALL[@]} -eq 0 ]]; then
+    echo "[INFO] All packages already installed, skipping installation"
+  else
+    echo "[INFO] Need to install (${#PACKAGES_TO_INSTALL[@]}): ${PACKAGES_TO_INSTALL[*]}"
+    install_packages "${PACKAGES_TO_INSTALL[@]}"
+    echo "[INFO] Package installation completed"
+  fi
 else
-  echo "[INFO] Need to install (${#PACKAGES_TO_INSTALL[@]}): ${PACKAGES_TO_INSTALL[*]}"
-  install_packages "${PACKAGES_TO_INSTALL[@]}"
-  echo "[INFO] Package installation completed"
+  # --- No-sudo flow: prebuilt binaries + source builds ---
+  echo "[INFO] sudo not available, using no-sudo installation path"
+  install_packages_nosudo
+  echo "[INFO] No-sudo package installation completed"
 fi
 
 # ============================
@@ -446,8 +880,12 @@ fi
 #  Locale (apt systems only)
 # ============================
 if [[ "$PKG_MANAGER" == "apt" ]]; then
-  $SUDO locale-gen en_US.UTF-8
-  $SUDO update-locale LANG=en_US.UTF-8
+  if [[ "$HAS_SUDO" == true ]]; then
+    $SUDO locale-gen en_US.UTF-8
+    $SUDO update-locale LANG=en_US.UTF-8
+  else
+    echo "[INFO] Skipping locale-gen (no sudo). ~/.zprofile already sets LANG/LC_ALL."
+  fi
 fi
 
 echo
@@ -460,6 +898,10 @@ echo " - emojify (git log emoji renderer)"
 echo " - uv (Python toolchain)"
 echo " - fd-find, ripgrep, fzf, zoxide"
 echo " - Locale: en_US.UTF-8"
+if [[ "$HAS_SUDO" == false && "$PKG_MANAGER" != "brew" ]]; then
+  echo " - Mode: no-sudo (prebuilt binaries in ~/.local/bin)"
+  echo " - Skipped: bear, build-essential, libssl-dev (need sudo)"
+fi
 echo "===================================="
 echo
 echo "Remember to:"

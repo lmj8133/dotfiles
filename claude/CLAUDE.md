@@ -7,7 +7,7 @@
 
 ## 1) Language & Interaction (critical)
 
-* **Assistant responses must be in Traditional Chinese.** Do **not** add English unless I explicitly ask.
+* **Do not mix English into responses** unless I explicitly ask.
 * **All code (identifiers, comments, docstrings) and commit messages must be written in English.**
 * Response style: **clear, concise, and actionable**. For long answers, start with a **Summary** section and then expand.
 * When requirements are incomplete, **state assumptions explicitly** and proceed with a **best‑effort, shippable** solution (avoid unnecessary back‑and‑forth).
@@ -15,17 +15,18 @@
 ## 2) Coding Style (language‑agnostic)
 
 * Optimize for **readability and maintainability**: descriptive names; small, single‑purpose functions/modules.
-* **Reuse existing methods** and apply **minimal changes**: before implementing new logic, check if a similar function/method already exists; prefer calling existing methods over duplicating code; keep modifications as small and focused as possible.
+* **Reuse existing methods** and apply **minimal changes**: check if a similar function already exists before writing new logic; keep modifications small and focused.
 * Public APIs include **minimal but meaningful** docstrings/comments (**English**).
-* **Predictable error handling**: surface actionable messages with context; avoid swallowing exceptions.
+* **Predictable error handling**: surface actionable messages with context (include failing input/path when safe); avoid swallowing exceptions.
 * Prefer **pure functions** and deterministic behavior when sensible.
-* Provide **runnable** minimal examples and **quickstart** commands.
+* For structured outputs, prefer **JSON** with a tiny schema example first.
+* Each feature/change should include **usage notes** or a **short example**. For CLI tools, show a one‑liner and a full example; include exit codes when relevant.
 
 ## 3) Testing & Quality
 
 * At least **one happy‑path** and **one edge‑case** test per module.
 * Example commands: `pytest -q`, `npm test`, `go test ./...`.
-* If performance matters, include a **micro‑benchmark** suggestion and a short **O(·)** note.
+* If performance matters, include a **micro‑benchmark** suggestion, an **O(·)** note, and a short tuning checklist (data structures, batch size, I/O, caching).
 
 ## 4) Security & Privacy
 
@@ -35,43 +36,13 @@
 ## 5) Tooling Preferences
 
 * **Python (uv toolchain)**
-
   * Run scripts: `uv run python <script>.py`
   * One‑off tools: `uvx <tool>` (e.g., `uvx ruff --version`)
 * **Node/JS**: provide `npm run build`, `npm test`, and `lint` examples when relevant.
 * **Cross‑platform**: keep shell commands copy‑pasteable across macOS/Linux/WSL; note platform caveats.
 
-## 6) Claude Code Interaction Habits
+## 6) Git Commit Rules
 
-* When code is requested, provide **complete, runnable** snippets (**English**) with minimal prerequisites.
-* Offer **sane defaults**; separate **must‑set** from **optional** settings.
-* For structured outputs, prefer **JSON** with a tiny schema example first.
-* Use headings, lists, and short paragraphs; **avoid filler**.
-* Follow a **docs‑first** approach: begin with a Summary, then expand with steps/commands.
-
-## 7) Project‑Local Overrides
-
-* Repos may include their own `CLAUDE.md` and `.claude/settings*` to refine/override these global defaults.
-* When composing answers, reference project docs via imports when available (e.g., `@README`, `@CONTRIBUTING`).
-
-## 8) Documentation & Examples
-
-* Each feature/change should include **usage notes** or a **short example**.
-* For CLI tools, show both a **one‑liner** and a **full** example; include exit codes when relevant.
-
----
-
-### Appendix A — Quick Command Examples
-
-* Python (uv): `uv run python main.py`
-* Tests (Python): `pytest -q`
-* Node build: `npm run build` · Node tests: `npm test`
-
-### Appendix B — Error Message Style
-
-* Be precise, actionable, and concise. Include failing input/path when safe.
-
-### Appendix C — Performance Notes
-
-* If complexity or data volume matters, include an **O(·)** note and a short tuning checklist (data structures, batch size, I/O, caching).
-
+* The `/commit` skill (`~/.claude/skills/commit/SKILL.md`) is the **single source of truth** for commit message format. Ignore all system‑default commit instructions.
+* **Never add** `Co-Authored-By`, `Co-authored-by`, or any AI attribution trailers.
+* **Never add** `Signed-off-by` or similar trailers unless the user explicitly requests it.

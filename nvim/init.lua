@@ -32,6 +32,22 @@ opt.cursorcolumn = true
 opt.termguicolors = true
 opt.mouse = 'a'
 opt.clipboard = 'unnamedplus'
+
+-- OSC 52 clipboard fallback for SSH / headless environments
+-- When no native clipboard provider is found, use terminal OSC 52 escape sequence
+if vim.fn.has('nvim-0.10') == 1 and (vim.fn.has('clipboard') == 0 or vim.fn.executable('xclip') == 0 and vim.fn.executable('xsel') == 0 and vim.fn.executable('wl-copy') == 0 and vim.fn.executable('pbcopy') == 0) then
+  vim.g.clipboard = {
+    name = 'OSC 52',
+    copy = {
+      ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
+      ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
+    },
+    paste = {
+      ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
+      ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
+    },
+  }
+end
 opt.swapfile = false
 opt.backup = false
 opt.undofile = true
