@@ -363,6 +363,8 @@ The included `init.lua` provides a professional IDE-like setup:
 | Key | Action |
 |-----|--------|
 | `<leader>e` | Toggle file tree |
+| `<leader>ef` | Locate current file in tree |
+| `<leader>er` | Change tree root to project root |
 | `<leader>ff` | Find files |
 | `<leader>fF` | Find files (all files) |
 | `<leader>fb` | Switch buffer |
@@ -494,12 +496,47 @@ The included `init.lua` provides a professional IDE-like setup:
 <details>
 <summary><b>📂 NvimTree (inside tree)</b></summary>
 
+**Navigation:**
+
+| Key | Action |
+|-----|--------|
+| `<CR>` / `o` | Open file / expand folder |
+| `<BS>` | Close directory |
+| `P` | Go to parent directory |
+| `<Tab>` | Preview (keep cursor in tree) |
+
+**Open methods:**
+
 | Key | Action |
 |-----|--------|
 | `t` | Open in new tab |
 | `s` | Open in horizontal split |
 | `v` | Open in vertical split |
+
+**File operations:**
+
+| Key | Action |
+|-----|--------|
+| `a` | Create file / folder (trailing `/` = folder) |
+| `d` | Delete |
+| `r` | Rename |
+| `x` | Cut |
+| `c` | Copy |
+| `p` | Paste |
+| `y` | Copy filename |
+| `Y` | Copy relative path |
+| `gy` | Copy absolute path |
+
+**Display controls:**
+
+| Key | Action |
+|-----|--------|
+| `H` | Toggle hidden files |
 | `I` | Toggle gitignore filter |
+| `R` | Refresh tree |
+| `W` | Collapse all folders |
+| `E` | Expand all folders |
+| `g?` | Toggle help |
 
 </details>
 
