@@ -5,75 +5,50 @@ description: "Convert Markdown to professional LaTeX Beamer presentations while 
 
 # Markdown to LaTeX Beamer Presentation
 
-## ⚠️ CRITICAL RULE: PRESERVE ORIGINAL STRUCTURE
+You are a **format converter**, not a content editor. Markdown structure maps
+1:1 to LaTeX structure. Preserve the author's logic flow — when in doubt, be literal.
 
-**Your job is FORMAT CONVERSION, not content reorganization.**
+## Core Rules
 
-### What you MUST preserve:
-- ✅ Original heading hierarchy (### → slide titles, exactly as written)
-- ✅ Order of sections and ideas
-- ✅ Author's logical flow
-- ✅ All content (no omissions)
-- ✅ Emphasis (bold/italic patterns)
+**MUST preserve:** heading hierarchy, section order, logical flow, all content, emphasis patterns.
 
-### What you MAY do:
-- ✅ Convert Markdown syntax to LaTeX syntax
-- ✅ Add visual formatting (blocks, columns) to enhance readability
-- ✅ Split oversized content across slides IF it breaks slide boundaries
-- ✅ Choose appropriate themes and colors
+**MAY do:** convert syntax, add visual formatting (blocks, columns), split oversized slides, choose themes.
 
-### What you MUST NOT do:
-- ❌ Change heading text or order
-- ❌ Merge or reorganize sections
-- ❌ Add content not in original
-- ❌ Rearrange the logical flow
-- ❌ Omit or summarize content
+**MUST NOT:** change heading text/order, merge/reorganize sections, add/omit content, rearrange flow.
 
 ---
 
-## Quick Workflow
+## Workflow
 
-User runs Claude Code from directory containing Markdown file.
-
-```bash
-1. ls && view ./file.md              # Read file
-2. [Analyze structure]               # Map headers → slides
-3. [Detect language]                 # Choose compiler
-4. [Choose theme]                    # Visual style only
-5. create_file presentation.tex      # Convert 1:1
-6. pdflatex/xelatex (×2)            # Compile
-7. ls -lh presentation.pdf           # Verify
+```
+1. Read Markdown file           → map headers to slides
+2. Detect language               → choose compiler (pdflatex / xelatex)
+3. Choose theme                  → visual style only
+4. Convert to LaTeX              → 1:1 mapping
+5. Compile (×2)                  → generate PDF
+6. Report                        → list output files
 ```
 
-**All files stay in current directory.**
+All files stay in current directory.
 
 ---
 
 ## Step 1: Analyze Structure
 
-Read the Markdown and create a **slide map**:
+Read the Markdown and create a **slide map** in your thinking block:
 
-```bash
-view ./file.md
 ```
-
-**In thinking block, create mapping:**
-```
-Line 1: # Main Title          → Title slide
-Line 5: ## Section 1          → Section slide (optional)
-Line 8: ### Slide 1           → Frame 1: "Slide 1"
-Line 15: ### Slide 2          → Frame 2: "Slide 2"
-Line 22: ### Slide 3          → Frame 3: "Slide 3"
-...
-
+# Main Title          → Title slide (\title{})
+## Section 1          → \section{} (optional divider)
+### Slide 1           → \begin{frame}{Slide 1}
+### Slide 2           → \begin{frame}{Slide 2}
 Total: X slides from X level-3 headers
 ```
 
-**Rules for mapping:**
-- `#` (h1) → Title slide
-- `##` (h2) → Section divider (optional, use `\section{}`)
-- `###` (h3) → Individual slide with exact title
-- Each `###` = one `\begin{frame}{exact title}...\end{frame}`
+**Mapping rules:**
+- `#` (h1) → `\title{}`  (title slide)
+- `##` (h2) → `\section{}` (optional divider)
+- `###` (h3) → `\begin{frame}{exact title}...\end{frame}`
 
 **Language detection:**
 ```bash
@@ -84,15 +59,11 @@ else
 fi
 ```
 
-**Content density check:**
-- If one `###` section has >30 lines → split into part 1, part 2
-- Otherwise keep as single slide
+**Content density:** If a `###` section has >30 lines or >8 bullets → plan to split.
 
 ---
 
 ## Step 2: Choose Theme
-
-Pick theme based on **visual style preference** (NOT content):
 
 | Style | Theme | Color |
 |-------|-------|-------|
@@ -101,7 +72,7 @@ Pick theme based on **visual style preference** (NOT content):
 | Professional | `CambridgeUS` | `dolphin` |
 | Minimal | `default` | `seagull` |
 
-**If user requests specific theme, use that. Otherwise choose based on formality level.**
+Use user-requested theme if specified; otherwise choose based on formality.
 
 ---
 
@@ -114,7 +85,7 @@ Pick theme based on **visual style preference** (NOT content):
 \usetheme{Madrid}
 \usecolortheme{beaver}
 
-% Chinese support (if detected)
+% Chinese support (uncomment if detected)
 % \usepackage{xeCJK}
 % \setCJKmainfont{Noto Sans CJK TC}
 
@@ -128,107 +99,66 @@ Pick theme based on **visual style preference** (NOT content):
     keywordstyle=\color{blue}\bfseries
 }
 
-\title{[从 # 提取]}
+\title{[from \# heading]}
 \author{Author}
 \date{\today}
 
 \begin{document}
 \frame{\titlepage}
 
-% Convert ## to \section{} (optional)
-% Convert ### to \begin{frame}{exact title}
+% ## → \section{}
+% ### → \begin{frame}{exact title}...\end{frame}
 
 \end{document}
 ```
 
 ### Conversion Rules
 
-**1:1 mapping - do NOT reorganize:**
-
 | Markdown | LaTeX | Notes |
 |----------|-------|-------|
 | `# Title` | `\title{Title}` | Title slide |
 | `## Section` | `\section{Section}` | Optional divider |
 | `### Slide` | `\begin{frame}{Slide}...\end{frame}` | **Use exact title** |
-| `**bold**` | `\textbf{bold}` | Preserve emphasis |
+| `**bold**` | `\textbf{bold}` | |
 | `*italic*` | `\emph{italic}` | |
 | `` `code` `` | `\texttt{code}` | |
-| `- item` | `\begin{itemize}\item item\end{itemize}` | |
-| `1. item` | `\begin{enumerate}\item item\end{enumerate}` | |
+| `- item` | `\begin{itemize}\item ...\end{itemize}` | |
+| `1. item` | `\begin{enumerate}\item ...\end{enumerate}` | |
+| Code block | `\begin{lstlisting}...\end{lstlisting}` | Frame needs `[fragile]` |
+| `$formula$` | `$formula$` | Inline math |
+| `$$formula$$` | `\[ formula \]` | Display math |
+| `![](img.png)` | `\includegraphics[width=0.7\textwidth]{img.png}` | In `figure` env |
 
-**Code blocks:**
-```latex
-\begin{frame}[fragile]{Slide Title}
-\begin{lstlisting}[language=Python]
-code here
-\end{lstlisting}
-\end{frame}
-```
+### Visual Enhancement (optional)
 
-**Math:**
-- Inline: `$formula$`
-- Display: `\[ formula \]`
-
-**Images:**
-```latex
-\begin{figure}
-\centering
-\includegraphics[width=0.7\textwidth]{image.png}
-\caption{Caption}
-\end{figure}
-```
-
-### Visual Enhancement (OPTIONAL)
-
-Only add if it improves readability **without changing content**:
+Only add if the original Markdown **clearly marked** something as special
+(e.g., bold definitions, explicit pros/cons, "important"/"warning" labels):
 
 ```latex
-% Key definition (if author used bold or stated "definition")
-\begin{block}{Term}
-Definition text from original
-\end{block}
-
-% Comparison (if author listed pros/cons, before/after)
-\begin{columns}
-\column{0.48\textwidth}
-Original left content
-\column{0.48\textwidth}
-Original right content
-\end{columns}
-
-% Warning (if author used "important", "warning", "note")
-\begin{alertblock}{Warning}
-Original warning text
-\end{alertblock}
+\begin{block}{Term}         % author used bold or "definition"
+\begin{alertblock}{Warning}  % author used "important", "warning", "note"
+\begin{columns}              % author listed pros/cons, before/after
 ```
 
-**DO NOT use blocks to "highlight what you think is important"** - only use them if the original Markdown clearly marked something as special.
+Do NOT use blocks to highlight what you think is important.
 
 ---
 
 ## Step 4: Handle Content Overflow
 
-**If single ### section has too much content for one slide:**
+If a single `###` section overflows one slide:
 
 ```latex
-% Original: ### Long Section with 40 lines
-
-% Split into:
 \begin{frame}{Long Section (1/2)}
-First half of content
+  First half of content
 \end{frame}
-
 \begin{frame}{Long Section (2/2)}
-Second half of content
+  Second half of content
 \end{frame}
 ```
 
-**Criteria for splitting:**
-- >30 lines of text
-- >8 bullet points
-- Code + explanation >20 lines
-
-**Preserve order** - just distribute across multiple slides.
+**Split criteria:** >30 lines of text, >8 bullet points, or code + explanation >20 lines.
+Preserve original order — just distribute across slides.
 
 ---
 
@@ -236,15 +166,13 @@ Second half of content
 
 ```bash
 # English
-pdflatex presentation.tex
-pdflatex presentation.tex
+pdflatex presentation.tex && pdflatex presentation.tex
 
 # Chinese
-xelatex presentation.tex
-xelatex presentation.tex
+xelatex presentation.tex && xelatex presentation.tex
 ```
 
-**Common errors:**
+**Common fixes:**
 
 | Error | Fix |
 |-------|-----|
@@ -256,13 +184,8 @@ xelatex presentation.tex
 
 ---
 
-## Step 6: Report Completion
+## Step 6: Report
 
-```bash
-ls -lh presentation.pdf
-```
-
-**Report format:**
 ```
 Converted Markdown to Beamer presentation.
 
@@ -275,46 +198,11 @@ Used [theme] theme. Preserved all original sections and content.
 
 ---
 
-## Example: Faithful Conversion
+## Quick Example
 
-**Input Markdown:**
-```markdown
-# Machine Learning Basics
-
-## Introduction
-
-### What is ML?
-Machine learning is a subset of AI. It has three main types.
-
-### Three Types
-- Supervised learning
-- Unsupervised learning
-- Reinforcement learning
-
-### Supervised Learning
-Uses labeled data. Example: image classification.
-```
-
-**Output LaTeX (FAITHFUL):**
+**Input:** `### Three Types` with a bullet list →
+**Output:**
 ```latex
-\documentclass[aspectratio=169]{beamer}
-\usetheme{Madrid}
-\usecolortheme{beaver}
-\usepackage{graphicx,amsmath}
-
-\title{Machine Learning Basics}
-\author{Author}
-\date{\today}
-
-\begin{document}
-\frame{\titlepage}
-
-\section{Introduction}
-
-\begin{frame}{What is ML?}
-Machine learning is a subset of AI. It has three main types.
-\end{frame}
-
 \begin{frame}{Three Types}
 \begin{itemize}
 \item Supervised learning
@@ -322,75 +210,19 @@ Machine learning is a subset of AI. It has three main types.
 \item Reinforcement learning
 \end{itemize}
 \end{frame}
-
-\begin{frame}{Supervised Learning}
-Uses labeled data. Example: image classification.
-\end{frame}
-
-\end{document}
 ```
 
-**Why this is correct:**
-- ✅ Exact title text ("What is ML?" not "Introduction to ML")
-- ✅ Original order maintained
-- ✅ No content added or removed
-- ✅ Simple list stays as list (no fancy blocks unless needed)
-- ✅ Each ### becomes exactly one frame
+Key: exact title, original order, no added/removed content.
 
 ---
 
-## Conversion Checklist
+## Pre-Delivery Checklist
 
-Before reporting completion:
-
-### Structure Fidelity
-- [ ] Every `###` has corresponding `\begin{frame}{exact title}`
+- [ ] Every `###` has a corresponding `\begin{frame}{exact title}`
 - [ ] Slide order matches Markdown order
-- [ ] No sections merged or rearranged
-- [ ] All content included (nothing omitted)
-
-### Content Fidelity
+- [ ] No sections merged or rearranged; all content included
 - [ ] Titles use exact original text
-- [ ] Bold/italic patterns preserved
-- [ ] Lists maintain original items and order
-- [ ] Code blocks included as-is
-- [ ] No content invented or added
-
-### Technical Quality
-- [ ] PDF compiles without errors
+- [ ] Bold/italic/list patterns preserved
 - [ ] Code frames use `[fragile]`
-- [ ] Math renders correctly
-- [ ] Images load (if any)
+- [ ] PDF compiles without errors
 - [ ] Text fits on slides
-
----
-
-## Best Practices
-
-**DO:**
-- ✅ Preserve original structure exactly
-- ✅ Use exact heading text as frame titles
-- ✅ Keep original content order
-- ✅ Split oversized slides only when necessary
-- ✅ Use `[fragile]` for code
-
-**DON'T:**
-- ❌ Reorganize sections "to improve flow"
-- ❌ Change heading text "to be clearer"
-- ❌ Merge sections "because they're related"
-- ❌ Add introductory/summary slides not in original
-- ❌ Omit content "because it's not important"
-- ❌ Rearrange bullets "for better logic"
-
----
-
-## Notes for Claude Code
-
-**Remember:**
-- You are a **format converter**, not a content editor
-- Markdown structure → LaTeX structure (1:1 mapping)
-- Preserve logic flow - author knows best
-- Only split content for slide overflow, never reorganize
-- When in doubt, be literal
-
-**Success = Original structure visible in slides + professional LaTeX formatting**

@@ -15,6 +15,22 @@ User invokes `/commit`
 
 ## Workflow
 
+### Step 0: Precondition Check
+
+Before anything, verify the repo state:
+
+1. Run `git status` to check for changes.
+   - **Clean working tree** → inform user "No changes to commit" and **stop**.
+   - **Unmerged paths / rebase in progress** → warn user about the current state
+     (e.g., "You are in the middle of a rebase — resolve conflicts first") and **stop**.
+2. Scan changed files for **sensitive patterns**:
+   - `.env`, `.env.*`, `credentials.*`, `*secret*`, `*.pem`, `*.key`, `id_rsa*`
+   - If any match → emit a ⚠️ warning listing the files and ask user to confirm
+     before proceeding.
+3. If diff is very large (>500 added/removed lines across all files):
+   - Suggest splitting into smaller, focused commits.
+   - Still proceed with analysis if the user wants a single commit.
+
 ### Step 1: Gather Complete Diff
 
 Run these commands to understand ALL changes (not just current task):
@@ -59,6 +75,16 @@ Output the suggested commit message in a fenced code block:
 Then list the files that would be included (from `git status`).
 Do **not** run `git add`, `git commit`, or any other write command.
 Stop and wait for the user's next instruction.
+
+## Anti-patterns
+
+Avoid these common mistakes:
+
+- ❌ Do NOT combine unrelated changes into one commit — suggest splitting
+- ❌ Do NOT use generic messages like "update", "fix", "changes"
+- ❌ Do NOT include generated files (`*.pyc`, `node_modules/`, `dist/`, `.DS_Store`)
+- ❌ Do NOT write a body that just restates the title
+- ❌ Do NOT reference issue numbers unless they appear in the diff or conversation
 
 ## Gitmoji Reference
 
