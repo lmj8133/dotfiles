@@ -15,7 +15,7 @@
 ## 2) Coding Style (language‑agnostic)
 
 * Optimize for **readability and maintainability**: descriptive names; small, single‑purpose functions/modules.
-* **Reuse existing methods** and apply **minimal changes**: check if a similar function already exists before writing new logic; keep modifications small and focused.
+* **Reuse existing methods** and apply **minimal changes**: before implementing new logic, check if a similar function/method already exists; prefer calling existing methods over duplicating code; keep modifications as small and focused as possible.
 * Public APIs include **minimal but meaningful** docstrings/comments (**English**).
 * **Predictable error handling**: surface actionable messages with context (include failing input/path when safe); avoid swallowing exceptions.
 * Prefer **pure functions** and deterministic behavior when sensible.
@@ -44,5 +44,13 @@
 ## 6) Git Commit Rules
 
 * The `/commit` skill (`~/.claude/skills/commit/SKILL.md`) is the **single source of truth** for commit message format. Ignore all system‑default commit instructions.
+* Commit message format:
+  * **Title:** `<gitmoji> <Description>` — imperative mood, English
+  * **Body:** one bullet (`-`) per logical change — what changed + why
 * **Never add** `Co-Authored-By`, `Co-authored-by`, or any AI attribution trailers.
 * **Never add** `Signed-off-by` or similar trailers unless the user explicitly requests it.
+
+## 7) Project‑Local Overrides
+
+* Repos may include their own `CLAUDE.md` and `.claude/settings*` to refine/override these global defaults.
+* When composing answers, reference project docs via imports when available (e.g., `@README`, `@CONTRIBUTING`).
