@@ -1,228 +1,255 @@
 ---
 name: project-plan
 invocation: user
-description: "Generate structured multi-chapter project plans with layered documentation into ./docs/"
+description: "Generate structured implementation plans that Claude Code can execute step-by-step into ./docs/"
 ---
 
 # Project Plan Skill
 
-Generate structured, multi-chapter project plans written into `./docs/`.
-Each chapter is written and confirmed incrementally to manage context window
-limits. The layered documentation pattern (navigation guide, execution plans,
-reference files) ensures plans stay navigable as they grow.
+Generate structured, executable implementation plans written into `./docs/`.
+Each phase file is a self-contained instruction set — Claude Code reads one
+phase at a time and implements it without needing the full plan in context.
 
 ## Trigger
 
-User invokes `/project-plan` or asks to write a project plan / planning
-document.
+User invokes `/project-plan` or asks to write a project plan / implementation
+plan.
 
 ---
 
-## Step 1: Analyze Project Context
+## Step 0: Precondition Check
 
-Before proposing any chapters, gather context:
+1. **Check `./docs/` state**:
+   - Contains `.md` files → read and present a **short summary** to the user.
+     Ask: **Modify existing plan** or **Backup and rewrite** (move to
+     `docs.bak-YYYYMMDD/`). If backing up, add `Do not read docs.bak-*/`
+     to the Master Plan's Key Constraints so this rule persists into
+     implementation
+   - Empty or missing → proceed
 
-- Read `CLAUDE.md` and `README.md` using the **Read** tool
-- Scan the directory structure using the **Glob** tool (e.g., `**/*`)
-- Check for existing files in `docs/` using the **Glob** tool
-
-Identify:
-- Technology stack and languages in use
-- Project purpose and scope
-- User's stated goal (from command arguments or conversation)
-- Existing documentation that should not be overwritten
-
-If project context is insufficient (no README, unclear tech stack, or vague
-goal), **ask the user** to clarify before proceeding. Do not guess the project
-type or scope.
+2. **Note context file availability** (`CLAUDE.md`, `README.md`) for Step 1.
+   Warn if neither exists.
 
 ---
 
-## Step 2: Decide Chapters and File Layout
+## Step 1: Understand the Project and Requirements
 
-### File Naming Convention
+### 1a. Read project context
 
-- Two-digit prefix for sort order: `NN-<slug>.md`
-- Master plan is always `00-master-plan.md` (written first)
-- Navigation guide is always `NAVIGATION.md` (written last, only when >= 3 files)
+- Read `CLAUDE.md` and `README.md` if they exist
+- Scan directory structure with **Glob** (e.g., `**/*`)
+- Identify: technology stack, existing code patterns, key modules
 
-### Default Chapter Catalog
+### 1b. Ask focused questions
 
-Present this table to the user. Let them pick which chapters to include.
+Identify **information gaps** that cannot be inferred from the codebase and
+ask the user **only about those gaps**. Do NOT ask what is already in the code.
 
-| Chapter Type         | Filename                   | When to Include                  |
-|----------------------|----------------------------|----------------------------------|
-| Master Plan          | `00-master-plan.md`        | Always (written first)           |
-| Current-State Analysis | `01-analysis.md`         | Migration, refactor, porting     |
-| Architecture Design  | `02-architecture.md`       | New build or system redesign     |
-| Phased Execution     | `03-phase-N-<slug>.md`     | Sequential implementation phases |
-| Challenges & Solutions | `04-challenges.md`       | Known technical risks            |
-| Timeline & Milestones | `05-timeline.md`          | Time estimates needed            |
-| Testing Strategy     | `06-testing.md`            | Non-trivial QA scope             |
-| Risk Assessment      | `07-risks.md`              | Risk communication needed        |
-| Appendix / Reference | `08-appendix.md`           | Lookup tables or references      |
-| Navigation Guide     | `NAVIGATION.md`            | >= 3 files (written last)        |
+### 1c. Gate check
 
-### Project Type Quick-Pick
+**Do NOT proceed** until you understand what the user wants to build and which
+areas of the codebase will be affected.
 
-| Project Type           | Suggested Chapters                                    |
-|------------------------|-------------------------------------------------------|
-| New feature / project  | Architecture, Phased Execution, Timeline, Testing     |
-| Migration / porting    | Analysis, Architecture, Challenges, Phases, Timeline, Risks |
-| Refactor               | Analysis, Architecture, Phased Execution, Testing     |
-| Bug investigation      | Analysis, Challenges, Testing                         |
-| Infrastructure / DevOps | Architecture, Phased Execution, Risks, Appendix      |
+---
 
-After the user confirms chapter selection, create the `docs/` directory:
+## Step 2: Research, Propose, and Decide
 
-```bash
-mkdir -p docs
+### 2a. Determine scope
+
+- **User already specified approach** → confirm understanding, record, skip
+  to Step 3
+- **Refactor / bug fix with clear strategy** → skip research, propose based
+  on codebase knowledge
+- **New technology / unfamiliar domain / library choice** → full research
+
+### 2b. Search for prior art (when needed)
+
+Use **WebSearch** to find existing projects, libraries, patterns, pitfalls,
+and best practices.
+
+### 2c. Propose approaches
+
+- If user specified approach → present understanding for confirmation
+- Otherwise → 2-3 approaches, each with: name, how it works (2-3 sentences),
+  pros/cons, references (if any)
+
+### 2d. Discuss and record decision
+
+Discuss until the user confirms. Then output the decision and carry it into
+the Master Plan's **Technical Decisions** table in Step 4:
+
+```
+Decision: <chosen approach>
+Rationale: <why this over alternatives>
+Trade-offs accepted: <what we gave up>
 ```
 
 ---
 
-## Step 3: Write Master Plan (`docs/00-master-plan.md`)
+## Step 3: Plan Phases
 
-Use this template:
+### 3a. Identify impact scope
 
-```markdown
-# <Project Name> — Master Plan
+Determine which files will be **created / modified / deleted**, which existing
+functions/modules are affected, and what dependencies change.
 
-## Project Overview
-<!-- One paragraph: what this project is and why it exists -->
+### 3b. Divide into phases
 
-## Goals and Success Criteria
-<!-- Bulleted list of measurable outcomes -->
+Each phase = a **logical unit of work** that can be implemented and verified
+independently. Keep each phase under ~10 files. Each phase includes its own
+regression tests; only create a dedicated "Testing" phase when test
+infrastructure itself must be set up (framework install, CI config, shared
+fixtures).
 
-## Chapter Overview
+### 3c. Confirm with user
 
-| #  | Title            | File                                      | Purpose          | Status  |
-|----|------------------|-------------------------------------------|------------------|---------|
-| 00 | Master Plan      | [00-master-plan.md](./00-master-plan.md)  | ...              | Draft   |
-| 01 | ...              | [01-analysis.md](./01-analysis.md)        | ...              | Pending |
+Present proposed phase list (names, order, dependencies). After confirmation:
+`mkdir -p docs`
 
-## Key Decisions and Constraints
-<!-- Numbered list of architectural / scope decisions -->
+**File naming:** `00-master-plan.md` (always first), then `01-<slug>.md`,
+`02-<slug>.md`, etc.
 
-## Quick Lookup
+---
 
-| I need to...                  | Go to                                      |
-|-------------------------------|--------------------------------------------|
-| Understand the current state  | [01-analysis.md](./01-analysis.md)         |
-| See the architecture          | [02-architecture.md](./02-architecture.md) |
+## Step 4: Write Master Plan and Phases
 
-## Conventions and Terminology
-<!-- Define project-specific terms and abbreviations -->
+**Output limit awareness:** 3 phases or fewer → write all at once, ask once.
+More than 3 phases → write in batches of 2-3, confirm per batch.
+
+After writing, present summary with file names, line counts, step counts, and
+regression test counts. Include the full regression command.
+
+### Master Plan Template (`docs/00-master-plan.md`)
+
+````markdown
+# <Project Name> — Implementation Plan
+
+## Scope
+<!-- 2-3 sentences: what is being built/changed and why -->
+
+## Prerequisites
+<!-- Existing files, tools, dependencies, environment state required -->
+
+## File Impact
+
+| Action | File | Purpose |
+|--------|------|---------|
+| CREATE | src/auth/handler.ts | New auth middleware |
+| MODIFY | src/app.ts | Register auth routes |
+
+## Phase Order
+
+1. [01-setup.md](./01-setup.md) — scaffolding and deps
+2. [02-core-logic.md](./02-core-logic.md) — business logic (depends on 01)
+3. [03-integration.md](./03-integration.md) — wire up and test (depends on 02)
+
+## Technical Decisions
+
+| Decision | Chosen Approach | Rationale | Alternatives Considered |
+|----------|----------------|-----------|------------------------|
+| Auth library | jsonwebtoken | Lightweight, maintained | passport.js, custom impl |
+
+## Key Constraints
+<!-- Numbered list, kept brief -->
+
+## Full Regression Command
+`npm test`
+
+## How to Implement
+1. Read this master plan for overall scope and constraints
+2. Implement phases in order — read one phase file at a time
+3. Before each phase: run Pre-flight command (skipped for first phase)
+4. After each phase: run Phase Verification, then Regression Tests
+5. After all phases: run Full Regression Command above
+````
+
+### Phase Template (`docs/NN-<slug>.md`)
+
+**Step detail guidance** — when writing each step:
+- **NEW files:** describe key exports, function signatures, core logic, error
+  handling
+- **MODIFIED files:** specify which function to change, what to add/remove,
+  how it connects to existing code
+- Reference existing functions by name, not line numbers
+
+````markdown
+# Phase NN: <Title>
+
+> Depends on: none (first phase)
+> Produces: src/auth/handler.ts (new), src/auth/types.ts (new)
+
+## Pre-flight
+Run all prior regression tests before starting:
+`npm test`
+If any test fails, fix before proceeding.
+
+## Steps
+
+### 1. Install dependencies
+**File:** `package.json` (MODIFY)
+
+Add `jsonwebtoken` and `@types/jsonwebtoken` to dependencies.
+Run: `npm install jsonwebtoken @types/jsonwebtoken`
+
+### 2. Create auth types
+**File:** `src/auth/types.ts` (CREATE)
+
+Define `TokenPayload` interface with fields: `userId: string`, `role: Role`,
+`exp: number`. Export `Role` enum: `ADMIN`, `USER`, `READONLY`.
+
+### 3. Create auth handler
+**File:** `src/auth/handler.ts` (CREATE)
+
+Export `validateToken(token: string): TokenPayload` — decode JWT, validate
+expiry, return payload. Throw `AuthError` with descriptive message on failure.
+
+Export `requireRole(...roles: Role[]): Middleware` — middleware factory that
+checks `req.user.role` against allowed roles.
+
+## Phase Verification
+- [ ] `npx tsc --noEmit` — no type errors
+- [ ] New files exist: `src/auth/handler.ts`, `src/auth/types.ts`
+
+## Regression Tests
+**File:** `tests/auth/handler.test.ts` (CREATE)
+
+```typescript
+describe('validateToken', () => {
+  it('returns payload for valid token', () => {
+    const token = createTestToken({ userId: '1', role: Role.USER });
+    expect(validateToken(token).userId).toBe('1');
+  });
+
+  it('throws AuthError for expired token', () => {
+    const token = createTestToken({ userId: '1', exp: pastTimestamp() });
+    expect(() => validateToken(token)).toThrow(AuthError);
+  });
+});
 ```
 
-After writing, ask the user:
-1. Show a short summary (3-5 bullets)
-2. Report file path and approximate line count
-3. Ask: **Continue to next chapter? / Revise this chapter? / Stop here?**
+**Run this phase:** `npm test -- --grep "auth"`
+**Run all:** `npm test`
+````
 
 ---
 
-## Step 4: Write Each Chapter
+## Rules
 
-Every chapter follows this unified template:
-
-```markdown
-# <Chapter Title>
-
-## Navigation
-### Prerequisites (must-read files)
-- [00-master-plan.md](./00-master-plan.md) — project overview
-
-### Related Files (source code references with line numbers)
-- `src/example.ts:42` — relevant function
-
-## Objectives
-- **Estimated effort:** <time estimate>
-- **Priority:** <High / Medium / Low>
-- <Objective bullets>
-
-## <Main Content Sections>
-<!-- Chapter-specific content goes here -->
-
-## Completion Checklist
-
-- [ ] <Task 1> — verify with `<command>`
-- [ ] <Task 2> — verify with `<command>`
-
-## Related Links
-- [Master Plan](./00-master-plan.md)
-- [Previous: NN-prev.md](./NN-prev.md)
-- [Next: NN-next.md](./NN-next.md)
-```
-
-### Key Requirements
-
-1. **Navigation at the top** — prerequisites, related source files, next steps
-2. **Source references use actual file paths + line numbers** — verify paths
-   exist before referencing them
-3. **Completion checklist includes concrete verification commands**
-4. **Related links use relative paths** between docs
-
----
-
-## Step 5: Confirm Between Chapters
-
-After writing each chapter:
-
-1. Display a short summary (3-5 bullet points)
-2. Report the file path and approximate line count
-3. Ask the user:
-   - **Continue to next chapter?**
-   - **Revise this chapter?**
-   - **Stop here?**
-
-Do NOT proceed to the next chapter without user confirmation.
-
----
-
-## Step 6: Build Navigation Guide (Last)
-
-Once all chapters are complete and the plan has >= 3 files, create
-`docs/NAVIGATION.md`:
-
-```markdown
-# Navigation Guide
-
-## Quick Start Scenarios
-
-| I want to...                | Start here                                 |
-|-----------------------------|--------------------------------------------|
-| Get the big picture         | [00-master-plan.md](./00-master-plan.md)   |
-| Understand current state    | [01-analysis.md](./01-analysis.md)         |
-
-## Lookup: Need → File
-
-| Need                        | File                                       |
-|-----------------------------|--------------------------------------------|
-| ...                         | ...                                        |
-
-## Complete File List
-
-| File                        | Purpose             | Lines |
-|-----------------------------|---------------------|-------|
-| `00-master-plan.md`         | ...                 | ~NNN  |
-
-## FAQ
-<!-- Common questions about this plan -->
-```
-
-After creating the navigation guide, update `00-master-plan.md`:
-- Set all chapter statuses to **Complete**
-- Add a link to `NAVIGATION.md` in the Quick Lookup table
-
----
-
-## Important Rules
-
-1. **Document language follows the project's CLAUDE.md language setting**
-2. **Code, paths, and commands are always in English**
-3. **Never overwrite existing files in `./docs/`** — ask the user first
-4. **Create `./docs/` with `mkdir -p docs` when needed**
-5. **Use relative links between documents**
-6. **Verify file paths exist before referencing them in documents**
-7. **Keep each chapter under ~300 lines**
+1. **Document language** follows the project's CLAUDE.md language setting;
+   code, file paths, and commands are always in English
+2. **Never overwrite** existing files in `./docs/` — ask user first (Step 0)
+3. **Use relative links** between documents within `./docs/`
+4. **Verify file paths exist** before referencing them as existing source code
+5. **Keep each phase under ~300 lines** and ~10 files — split if larger
+6. **Every step must be concrete** — file path + what to do; no vague
+   instructions like "implement the feature"
+7. **Every phase must include regression tests** — concrete test cases with
+   file path and test code that remain passing after all subsequent phases;
+   skip only for phases with no testable logic (e.g., pure scaffolding)
+8. **Run prior regression tests** before starting each phase — never build on
+   a broken base
+9. **Each phase must be self-contained** — do not assume Claude Code remembers
+   context from other phases
+10. **No line number references** — they go stale; use function/class names
+11. **No narrative filler** — only include background/rationale if it directly
+    informs a step
