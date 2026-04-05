@@ -70,6 +70,11 @@ if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
   source "$HOME/.nvm/nvm.sh"
 fi
 
+########## Android SDK (platform-tools; macOS only) ##########
+if [[ "$IS_MACOS" == 1 && -d "$HOME/Library/Android/sdk/platform-tools" ]]; then
+  export PATH="$HOME/Library/Android/sdk/platform-tools:$PATH"
+fi
+
 ########## AI on Apple Silicon ##########
 export PYTORCH_ENABLE_MPS_FALLBACK=1
 
