@@ -1,0 +1,20 @@
+{
+  "enabledPlugins": {
+    "swift-lsp@claude-plugins-official": true
+  },
+  "language": "Traditional Chinese(Taiwan)",
+  "alwaysThinkingEnabled": false,
+  "effortLevel": "high",
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case \"$(uname)\" in Darwin) afplay /System/Library/Sounds/Ping.aiff ;; Linux) paplay /usr/share/sounds/freedesktop/stereo/bell.oga 2>/dev/null || aplay /usr/share/sounds/freedesktop/stereo/bell.oga 2>/dev/null ;; esac"
+          }
+        ]
+      }
+    ]
+  }
+}
