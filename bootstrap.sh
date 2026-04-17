@@ -867,6 +867,28 @@ else
 fi
 
 # ============================
+#  RTK (Rust Token Killer — Claude Code token optimizer)
+# ============================
+if command -v rtk &>/dev/null; then
+  echo "[INFO] rtk already installed: $(rtk --version 2>/dev/null || echo 'version unknown')"
+else
+  echo "[INFO] Installing RTK (Rust Token Killer)..."
+  curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh
+  # Ensure rtk is on PATH for the init step below
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+fi
+
+# Set up Claude Code integration (hook + RTK.md)
+if command -v rtk &>/dev/null; then
+  if [[ -f "$HOME/.claude/hooks/rtk-rewrite.sh" ]]; then
+    echo "[INFO] RTK Claude Code hook already installed, skip"
+  else
+    echo "[INFO] Setting up RTK Claude Code integration..."
+    rtk init -g --auto-patch || echo "[WARN] RTK init failed (non-fatal)"
+  fi
+fi
+
+# ============================
 #  UV (Python toolchain)
 # ============================
 if command -v uv &> /dev/null; then
@@ -895,6 +917,7 @@ echo " - Neovim / Zsh / plugins installed"
 echo " - Claude Code configs + Anthropic skills"
 echo " - nvm + Node 22 + tree-sitter-cli"
 echo " - emojify (git log emoji renderer)"
+echo " - RTK (Claude Code token optimizer)"
 echo " - uv (Python toolchain)"
 echo " - fd-find, ripgrep, fzf, zoxide"
 echo " - Locale: en_US.UTF-8"
