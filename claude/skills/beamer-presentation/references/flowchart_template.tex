@@ -1,0 +1,134 @@
+% Flowchart Template — ISO 5807 standard
+% Copy this file as a starting point for every flowchart figure.
+% Do NOT change styles or preamble. Layout constants may be adjusted
+% in the CONTENT section if the default spacing is too tight or loose.
+%
+% Usage:
+%   1. Copy to figures/fig_<name>/fig_<name>.tex
+%   2. Fill in nodes (Column C, L1, R1) and arrows
+%   3. Adjust layout constants if needed (move \def lines into CONTENT)
+%   4. Compile: pdflatex fig_<name>.tex
+%
+\documentclass[border=8pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc}
+
+\begin{document}
+
+% =================================================================
+% STYLES — do not modify
+% =================================================================
+\tikzset{
+  % --- Node styles (ISO 5807) ---
+  startstop/.style={
+    stadium, minimum width=3.2cm, minimum height=1cm,
+    text centered, draw=black, fill=blue!15,
+    font=\sffamily
+  },
+  process/.style={
+    rectangle, minimum width=3.6cm, minimum height=1cm,
+    text centered, draw=black, fill=orange!12,
+    font=\sffamily
+  },
+  decision/.style={
+    diamond, aspect=2.2,
+    minimum width=3.2cm, minimum height=1cm,
+    text centered, draw=black, fill=green!12,
+    font=\sffamily, inner sep=1pt
+  },
+  io/.style={
+    trapezium, trapezium left angle=70, trapezium right angle=110,
+    minimum width=3.2cm, minimum height=1cm,
+    text centered, draw=black, fill=yellow!15,
+    font=\sffamily
+  },
+  predef/.style={
+    rectangle, double, double distance=2pt,
+    minimum width=3.6cm, minimum height=1cm,
+    text centered, draw=black, fill=violet!10,
+    font=\sffamily
+  },
+  % --- Arrow style ---
+  arrow/.style={
+    thick, -{Stealth[length=6pt]}
+  },
+  % --- Edge label style ---
+  lbl/.style={
+    font=\sffamily\small, fill=white, inner sep=2pt
+  },
+}
+
+% =================================================================
+% LAYOUT CONSTANTS
+% =================================================================
+% Vertical spacing between center-column nodes
+\def\vgapSmall{1.5cm}   % process → process, process → decision
+\def\vgapLarge{2.2cm}    % decision → next node (diamond needs more room)
+% Horizontal distance from center to side nodes (L1/R1)
+\def\sideGap{3.5cm}
+% Feedback loop clearance beyond outermost side node edge
+\def\loopClearance{2.0cm}
+
+% =================================================================
+% CONTENT — replace the example below with your diagram
+% =================================================================
+\begin{tikzpicture}[node distance=1.8cm]
+
+  % --- Column C (center spine) ---
+  \node (start)  [startstop]                          {Start};
+  \node (proc1)  [process, below=\vgapSmall of start] {Process 1};
+  \node (dec1)   [decision, below=\vgapLarge of proc1]{Condition?};
+  \node (proc2)  [process, below=\vgapLarge of dec1]  {Process 2};
+  \node (stop)   [startstop, below=\vgapSmall of proc2]{End};
+
+  % --- Column L1 (left side exits) ---
+  % \node (retA) [startstop, left=\sideGap of dec1] {Return A};
+
+  % --- Column R1 (right side exits) ---
+  % \node (retB) [startstop, right=\sideGap of dec1] {Return B};
+
+  % --- Main spine arrows ---
+  \draw [arrow] (start) -- (proc1);
+  \draw [arrow] (proc1) -- (dec1);
+  \draw [arrow] (dec1)  -- node[lbl, right] {Yes} (proc2);
+  \draw [arrow] (proc2) -- (stop);
+
+  % --- Side exit arrows ---
+  % \draw [arrow] (dec1) -- node[lbl, above] {No} (retA);
+
+  % --- Feedback loops ---
+  % Two-part algorithm (see flowchart_standard.md for full explanation):
+  %
+  % Part 1: Compute safe L2/R2 x from ALL side nodes on each side.
+  %
+  % \path let
+  %   \p{a} = (rightNodeA.east),
+  %   \p{b} = (rightNodeB.east),
+  %   \n{rx} = {max(\x{a}, \x{b}) + \loopClearance}
+  % in coordinate (R2) at (\n{rx}, 0);
+  %
+  % \path let
+  %   \p{a} = (leftNodeA.west),
+  %   \p{b} = (leftNodeB.west),
+  %   \n{lx} = {min(\x{a}, \x{b}) - \loopClearance}
+  % in coordinate (L2) at (\n{lx}, 0);
+  %
+  % Part 2: Enter target decision via degree anchors (.30 / .150)
+  %         to avoid visual merging with side-exit arrows (.east/.west)
+  %         and main-spine arrows (.north/.south).
+  %
+  % \draw [arrow]
+  %   (rightNode.east) -- (R2 |- rightNode.east)   % horizontal to R2
+  %                    -- (R2 |- target.30)         % vertical to .30 y
+  %                    -- (target.30)               % horizontal into .30
+  % ;
+  %
+  % \draw [arrow]
+  %   (leftNode.west) -- (L2 |- leftNode.west)
+  %                   -- (L2 |- target.150)
+  %                   -- (target.150)
+  % ;
+
+\end{tikzpicture}
+
+\end{document}

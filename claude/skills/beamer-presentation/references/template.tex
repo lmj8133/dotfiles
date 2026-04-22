@@ -1,0 +1,60 @@
+\documentclass[aspectratio=169]{beamer}
+
+\usetheme{YOUR_THEME_HERE}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    breaklines=true,
+    frame=single,
+    framesep=4pt,
+    xleftmargin=16pt,
+    tabsize=4,
+    showstringspaces=false,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{red!70!black},
+}
+
+% Title information
+\title{YOUR_TITLE_HERE}
+\author{YOUR_AUTHOR_HERE}
+\institute{YOUR_INSTITUTE_HERE}
+\date{\today}
+
+% Show page numbers
+\setbeamertemplate{footline}[frame number]
+
+\begin{document}
+
+% Title slide
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% Table of contents
+\begin{frame}{Outline}
+    \tableofcontents
+\end{frame}
+
+%-------------------------------------------------------------------
+% CONTENT_SECTIONS_HERE
+%-------------------------------------------------------------------
+
+%-------------------------------------------------------------------
+% Closing slide
+%-------------------------------------------------------------------
+
+\begin{frame}[plain,c]
+    \begin{center}
+        \Huge The End
+    \end{center}
+\end{frame}
+
+\end{document}
