@@ -26,10 +26,9 @@ You are a **format converter**, not a content editor. Markdown structure maps
 3. Detect language & fonts   → choose compiler, verify CJK fonts
 4. Load template & theme     → from references/template.tex, choose theme
 5. Create figures            → for each diagram: write TikZ, compile, verify, fix
-6. Convert to LaTeX          → fill template with content, reference figure PDFs
-7. Compile main (×2)         → generate presentation PDF
-8. Verify                    → read PDF to check all pages
-9. Report                    → list output files
+6. Iterative convert & compile → write slides in batches, compile & verify each batch
+7. Sub Agent QA              → independent visual + outline review
+8. Report                    → list output files
 ```
 
 Output filename matches the Markdown source: `report.md` → `report.tex` / `report.pdf`.
@@ -215,11 +214,13 @@ If there are no diagrams to create, skip this step.
 
 ---
 
-## Step 6: Convert Markdown to LaTeX
+## Step 6: Iterative Convert & Compile
 
-Write `build/<name>.tex` by filling the template with converted content.
+This step combines conversion, compilation, and visual verification into a
+single iterative loop. **Do not write the entire .tex and compile once at the
+end** — work in batches so layout problems are caught and fixed early.
 
-### Conversion Rules
+### 6a. Conversion Rules
 
 | Markdown | LaTeX | Notes |
 |----------|-------|-------|
@@ -312,21 +313,49 @@ If a single `###` section overflows one slide:
 
 **Split criteria:** >30 lines of text, >8 bullet points, or code + explanation >20 lines.
 
----
+### 6b. Batch Loop
 
-## Step 7: Compile Main Presentation
+Work in batches of **5–10 slides** (one section boundary is a natural cut point).
+For each batch:
 
-Compile from within the `build/` directory:
-
-```bash
-# English
-cd build && pdflatex <name>.tex && pdflatex <name>.tex
-
-# Chinese
-cd build && xelatex <name>.tex && xelatex <name>.tex
+```
+1. Write the complete .tex file (preamble + all frames written so far + new batch
+   + \end{document}). Each batch iteration overwrites the file with the full content.
+2. Compile (×2 passes for TOC/references):
+     # English
+     cd build && pdflatex <name>.tex && pdflatex <name>.tex
+     # Chinese
+     cd build && xelatex <name>.tex && xelatex <name>.tex
+3. Convert new pages to PNG for precise inspection:
+     pdftoppm -r 150 -png -f <first_new> -l <last_new> <name>.pdf slide
+   If pdftoppm is not available, fall back to reading the PDF directly:
+     Read tool → build/<name>.pdf (pages: "<first_new>-<last_new>")
+4. Inspect each new page with the Read tool (PNG or PDF)
+5. Check for:
+   - Text overflow / overfull hboxes
+   - Slides too empty (< 30% used) or too crowded
+   - Figures cut off or missing
+   - Code blocks exceeding frame width
+   - Orphan titles (title on one slide, content on next)
+6. If ANY issue → fix the .tex → recompile → re-inspect that batch
+7. Move to the next batch
 ```
 
-**Common fixes:**
+**This loop is mandatory.** Do not skip visual inspection for any batch.
+
+### 6c. Final Full Verification
+
+After all batches are done, do one final full compile and verify it is **error-free**:
+
+```
+1. Compile the complete .tex (×2 passes)
+2. Check the log for errors and warnings (overfull hbox, missing refs, etc.)
+3. Fix any remaining compile issues → recompile
+```
+
+Visual inspection of every page is delegated to Step 7 (Sub Agent QA).
+
+**Common compile fixes:**
 
 | Error | Fix |
 |-------|-----|
@@ -339,17 +368,76 @@ cd build && xelatex <name>.tex && xelatex <name>.tex
 
 ---
 
-## Step 8: Verify
+## Step 7: Sub Agent QA
 
-After successful compilation, **must** visually verify the final PDF:
+**Rationale:** The agent who wrote the slides should not be the only one who
+verifies them — self-review tends to skip issues you've already "seen past."
+Dispatch an **independent sub agent** for a final quality sweep.
 
-1. Use the Read tool to open `build/<name>.pdf` — it renders each page as an image
-2. Check every page: text fits on slides, diagrams display correctly, no overflow, no missing content
-3. If issues are found, fix the `.tex` (or figure `.tex`) and recompile
+### 7a. Visual QA (mandatory)
+
+Use the Task tool with `subagent_type: "Explore"` to dispatch an Explore agent.
+Provide this prompt (fill in `<name>` with the presentation base name):
+
+```
+Visual QA for Beamer presentation.
+
+Files to inspect:
+- build/<name>.pdf (Read tool — inspect every page)
+- If PNG files exist in build/slide*.png, inspect those instead (one per page)
+
+Check EVERY page for these issues:
+1. Text overflow: any text running off the slide edge or into margins
+2. Orphan titles: a frame title appearing alone with content on the next slide
+3. Empty slides: slides with < 30% content area used
+4. Crowded slides: slides where content is visually cramped or text is too small
+5. Figure issues: images cut off, missing, or not properly centered
+6. Code overflow: code blocks exceeding the frame width or running off-slide
+7. Table overflow: tables wider than the slide or with truncated columns
+8. Consistent styling: font sizes, bullet styles, and spacing uniform across slides
+
+Report format — return ONLY one of:
+  PASS — no issues found
+  FAIL — list each issue as: "Page X: <description of problem>"
+```
+
+### 7b. Outline QA (mandatory)
+
+Use the Task tool with `subagent_type: "Explore"` to dispatch a second Explore agent.
+Provide this prompt (fill in `<name>` and `<md_file>` with absolute paths):
+
+```
+Outline QA for Beamer presentation.
+
+Files to inspect (use absolute paths):
+- <md_file> (the original Markdown source, at the working directory root)
+- build/<name>.tex (the generated LaTeX, inside the build/ subdirectory)
+
+Check for these structural issues:
+1. Missing content: any ### heading in the Markdown without a corresponding \begin{frame}
+2. Title mismatch: frame titles that differ from the original ### heading text
+3. Order mismatch: frames appearing in a different order than the Markdown headings
+4. Section numbering style: are \section{} titles consistent in style (all numbered, or all unnumbered)?
+5. Title length balance: are frame titles roughly similar in length, or are some extremely long/short?
+6. Orphan topics: topics introduced in the Markdown (mentioned in intro or overview) but never expanded
+7. Section boundaries: is it clear where one section ends and the next begins?
+8. Merged/split content: was any content merged across headings or split in a way that breaks logical flow?
+
+Report format — return ONLY one of:
+  PASS — no issues found
+  FAIL — list each issue as: "<issue type>: <description>"
+```
+
+### 7c. Act on Results
+
+- If **both** QA agents return PASS → proceed to Step 8.
+- If **either** returns FAIL → fix every reported issue in the `.tex`, recompile,
+  re-verify the fixed pages visually, then re-run the failing QA agent(s).
+- Repeat until both pass. Do not skip or ignore sub agent findings.
 
 ---
 
-## Step 9: Report
+## Step 8: Report
 
 ```
 Converted Markdown to Beamer presentation.
@@ -357,10 +445,12 @@ Converted Markdown to Beamer presentation.
 Files:
 - build/<name>.tex              (LaTeX source)
 - build/<name>.pdf              (final output, X slides)
+- build/slide*.png              (per-page previews, if pdftoppm available)
 - figures/fig_*/fig_*.tex       (diagram sources, if any)
 - figures/fig_*/fig_*.pdf       (compiled figures, if any)
 
 Used [theme] theme. Preserved all original sections and content.
+Sub Agent QA: Visual ✓  Outline ✓
 ```
 
 ---
@@ -377,8 +467,15 @@ Used [theme] theme. Preserved all original sections and content.
 **Build:**
 - [ ] Code frames use `[fragile]`
 - [ ] PDF compiles without errors
-- [ ] Text fits on slides
+- [ ] Text fits on slides (verified via batch inspection)
 - [ ] Outline and The End slides are present
+
+**Outline QA:**
+- [ ] Section numbering style is consistent (all numbered or all unnumbered)
+- [ ] Frame titles are balanced in length (no extreme outliers)
+- [ ] Section boundaries are clear and logical
+- [ ] No orphan topics (introduced but never expanded)
+- [ ] Story flow is coherent — each section builds on the previous
 
 **Diagrams (if any):**
 - [ ] All figures compile independently without errors
@@ -386,3 +483,7 @@ Used [theme] theme. Preserved all original sections and content.
 - [ ] Feedback/return arrows have sufficient clearance
 - [ ] Flowchart shapes follow ISO 5807 (see `references/flowchart_standard.md`)
 - [ ] All decision exits labeled (Yes/No)
+
+**Sub Agent QA:**
+- [ ] Visual QA agent returned PASS
+- [ ] Outline QA agent returned PASS
