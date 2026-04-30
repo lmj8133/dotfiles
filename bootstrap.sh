@@ -898,6 +898,65 @@ else
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 
+# Make sure subsequent steps in this script can find uv even on the
+# very first run (its installer puts the binary in ~/.local/bin but
+# doesn't relaunch the shell to update PATH).
+export PATH="$HOME/.local/bin:$PATH"
+
+# ============================
+#  MCP servers — pdf_snip
+# ============================
+if [[ -d ./mcp/pdf_snip ]]; then
+  echo "[INFO] Setting up pdf_snip MCP server..."
+
+  # Resolve the absolute path of the dotfiles root so the MCP config
+  # snippet can point at it from anywhere on the filesystem.
+  DOTFILES_ROOT="$(pwd)"
+
+  # 1. Pre-sync the venv so the first MCP launch isn't slow.
+  if command -v uv &>/dev/null; then
+    ( cd ./mcp/pdf_snip && uv sync ) \
+      || echo "[WARN] uv sync for pdf_snip failed (non-fatal)"
+  else
+    echo "[WARN] uv not on PATH — skipping pdf_snip venv sync"
+  fi
+
+  # 2. Merge the MCP config snippet into ~/.claude.json (requires jq).
+  CLAUDE_JSON="$HOME/.claude.json"
+  SNIPPET="./mcp/pdf_snip/mcp_config_snippet.json"
+  if [[ -f "$SNIPPET" ]]; then
+    if ! command -v jq &>/dev/null; then
+      echo "[WARN] jq is not installed — cannot merge pdf_snip into $CLAUDE_JSON"
+      echo "       Install jq and re-run bootstrap, or add the entry manually:"
+      echo "       (snippet at $SNIPPET, replace __DOTFILES__ with $DOTFILES_ROOT)"
+    else
+      # Render the snippet with the actual dotfiles path.
+      RENDERED=$(sed "s|__DOTFILES__|$DOTFILES_ROOT|g" "$SNIPPET")
+
+      # If ~/.claude.json doesn't exist yet, start from {}.
+      if [[ ! -f "$CLAUDE_JSON" ]]; then
+        echo "{}" > "$CLAUDE_JSON"
+      fi
+
+      # Merge: existing config wins, but pdf-snip entry is set
+      # unconditionally (so re-running picks up path / arg changes).
+      # We tolerate failures (set -e is on) — the user can hand-edit.
+      if jq --argjson new "$RENDERED" '
+            .mcpServers = ((.mcpServers // {}) + $new.mcpServers)
+          ' "$CLAUDE_JSON" > "$CLAUDE_JSON.tmp" \
+        && mv "$CLAUDE_JSON.tmp" "$CLAUDE_JSON"; then
+        echo "[INFO] Merged pdf-snip into $CLAUDE_JSON"
+      else
+        rm -f "$CLAUDE_JSON.tmp"
+        echo "[WARN] Failed to merge pdf-snip into $CLAUDE_JSON"
+        echo "       (jq error or write permission?). You can paste the"
+        echo "       snippet manually after replacing __DOTFILES__:"
+        echo "       $SNIPPET"
+      fi
+    fi
+  fi
+fi
+
 # ============================
 #  Locale (apt systems only)
 # ============================
@@ -919,6 +978,7 @@ echo " - nvm + Node 22 + tree-sitter-cli"
 echo " - emojify (git log emoji renderer)"
 echo " - RTK (Claude Code token optimizer)"
 echo " - uv (Python toolchain)"
+echo " - pdf-snip MCP server (mcp/pdf_snip)"
 echo " - fd-find, ripgrep, fzf, zoxide"
 echo " - Locale: en_US.UTF-8"
 if [[ "$HAS_SUDO" == false && "$PKG_MANAGER" != "brew" ]]; then

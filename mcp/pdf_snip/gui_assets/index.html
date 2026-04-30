@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>cut_figure review</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div id="status-bar">
+    <span id="status-text">Waiting for cut request from MCP&hellip;</span>
+  </div>
+
+  <div id="app" hidden>
+    <header>
+      <div class="meta">
+        <strong id="pdf-name"></strong>
+        <span class="figure-id">— <code id="figure-id"></code></span>
+      </div>
+      <div class="page-nav">
+        <button id="prev-page" type="button">&laquo; Prev</button>
+        <span class="page-info">
+          page <input id="page-input" type="number" min="1" step="1" />
+          / <span id="total-pages"></span>
+        </span>
+        <button id="next-page" type="button">Next &raquo;</button>
+        <button id="goto-page" type="button">Go</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="canvas-wrap">
+        <div class="canvas-toolbar">
+          <button id="add-eraser" type="button">+ Eraser</button>
+          <label>color
+            <input id="eraser-color" type="color" value="#ffffff" />
+          </label>
+          <span class="hint">scroll to zoom · space + drag to pan</span>
+        </div>
+        <div id="canvas-container">
+          <img id="page-image" alt="page" />
+          <div id="eraser-layer"></div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <h3>Crop preview</h3>
+        <div id="preview" class="preview-box"></div>
+
+        <div class="actions">
+          <button id="reset-bbox" type="button">Reset to suggested</button>
+          <button id="confirm" type="button" class="primary">Confirm</button>
+          <button id="cancel" type="button" class="danger">Cancel</button>
+        </div>
+
+        <p class="hint small">
+          The crop preview applies erasers in real time so you see the
+          final result before saving.
+        </p>
+      </aside>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

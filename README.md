@@ -12,6 +12,7 @@
 - **Node.js (NVM)**: Node 22 via nvm with tree-sitter-cli
 - **Smart Tools**: zoxide, fzf, fd-find, ripgrep for efficient navigation and searching
 - **Python Support**: uv toolchain with helpers (`act`, `pyinfo` commands)
+- **MCP servers**: `pdf-snip` for human-in-the-loop PDF region capture (under `mcp/`)
 
 ---
 
@@ -82,6 +83,8 @@ dotfiles/
 │   ├── commands/        # Custom slash commands
 │   └── skills/          # Custom Claude Code skills (user-created)
 │       └── beamer-presentation/  # Example: Markdown to LaTeX Beamer converter
+├── mcp/                 # Local MCP servers wired into Claude Code
+│   └── pdf_snip/        # PDF region → PNG with browser GUI review
 ├── nvim/                # Neovim configuration
 │   ├── init.lua         # Main Neovim config (LSP, plugins, keymaps)
 │   └── lua/             # Lua modules for local overrides

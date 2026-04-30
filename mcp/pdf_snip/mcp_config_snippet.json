@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "pdf-snip": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "__DOTFILES__/mcp/pdf_snip",
+        "python",
+        "server.py"
+      ],
+      "env": {}
+    }
+  }
+}
