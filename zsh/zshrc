@@ -15,7 +15,7 @@ if [[ "$IS_MACOS" == 1 && -x /opt/homebrew/bin/brew ]]; then
 fi
 
 ########## Zsh plugin base dir (per-OS) ##########
-if [[ "$IS_MACOS" == 1 ]]; then
+if [[ "$IS_MACOS" == 1 && -d /opt/homebrew/share/zsh-autosuggestions ]]; then
   ZSH_PLUGIN_DIR="/opt/homebrew/share"
 else
   ZSH_PLUGIN_DIR="$HOME/.local/share/zsh-plugins"
