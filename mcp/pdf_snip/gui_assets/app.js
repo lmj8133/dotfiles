@@ -24,6 +24,7 @@
   const nextBtn = document.getElementById('next-page');
   const gotoBtn = document.getElementById('goto-page');
   const addEraserBtn = document.getElementById('add-eraser');
+  const toggleDragBtn = document.getElementById('toggle-drag-mode');
   const eraserColor = document.getElementById('eraser-color');
   const pageImage = document.getElementById('page-image');
   const eraserLayer = document.getElementById('eraser-layer');
@@ -115,9 +116,9 @@
     redrawErasers();
 
     pageImage.onload = () => {
-      const initial = useSuggested && pageIndex === job.page_index
+      const suggested = useSuggested && pageIndex === job.page_index
         ? suggestedBboxImagePx() : null;
-      initCropper(initial);
+      initCropper(suggested || defaultCenteredBoxPx());
     };
     pageImage.src = objUrl;
   }
@@ -135,6 +136,17 @@
     };
   }
 
+  function defaultCenteredBoxPx() {
+    const w = imgWPx * 0.6;
+    const h = imgHPx * 0.6;
+    return {
+      left: (imgWPx - w) / 2,
+      top: (imgHPx - h) / 2,
+      width: w,
+      height: h,
+    };
+  }
+
   function initCropper(initialBoxPx) {
     cropper = new Cropper(pageImage, {
       viewMode: 1,
@@ -146,7 +158,7 @@
       zoomOnWheel: true,
       wheelZoomRatio: 0.1,
       toggleDragModeOnDblclick: false,
-      dragMode: 'move',
+      dragMode: 'crop',
       ready() {
         if (initialBoxPx) {
           this.cropper.setData({
@@ -156,6 +168,8 @@
             height: initialBoxPx.height,
           });
         }
+        toggleDragBtn.dataset.mode = 'crop';
+        toggleDragBtn.textContent = 'Draw';
         // Update preview whenever the crop box changes.
         renderPreview();
       },
@@ -429,18 +443,21 @@
     if (e.key === 'Enter') gotoBtn.click();
   });
   addEraserBtn.addEventListener('click', addEraser);
+  toggleDragBtn.addEventListener('click', () => {
+    if (!cropper) return;
+    const next = toggleDragBtn.dataset.mode === 'crop' ? 'move' : 'crop';
+    cropper.setDragMode(next);
+    toggleDragBtn.dataset.mode = next;
+    toggleDragBtn.textContent = next === 'crop' ? 'Draw' : 'Pan';
+  });
   resetBtn.addEventListener('click', () => {
-    if (!job) return;
-    if (currentPage !== job.page_index) {
-      renderPage(job.page_index, true);
-    } else if (cropper) {
-      const sb = suggestedBboxImagePx();
-      if (sb) {
-        cropper.setData({
-          x: sb.left, y: sb.top, width: sb.width, height: sb.height,
-        });
-      }
-    }
+    if (!job || !cropper) return;
+    const sb = currentPage === job.page_index ? suggestedBboxImagePx() : null;
+    const target = sb || defaultCenteredBoxPx();
+    cropper.setData({
+      x: target.left, y: target.top,
+      width: target.width, height: target.height,
+    });
   });
   confirmBtn.addEventListener('click', confirm);
   cancelBtn.addEventListener('click', cancel);

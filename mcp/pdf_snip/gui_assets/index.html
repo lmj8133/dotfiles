@@ -31,11 +31,12 @@
     <main>
       <div class="canvas-wrap">
         <div class="canvas-toolbar">
+          <button id="toggle-drag-mode" type="button" data-mode="crop">Draw</button>
           <button id="add-eraser" type="button">+ Eraser</button>
           <label>color
             <input id="eraser-color" type="color" value="#ffffff" />
           </label>
-          <span class="hint">scroll to zoom · space + drag to pan</span>
+          <span class="hint">scroll to zoom · drag = redraw box (Draw) or pan (Pan)</span>
         </div>
         <div id="canvas-container">
           <img id="page-image" alt="page" />
