@@ -56,10 +56,10 @@ trigger: Fallback for Python work — applies when no other Python rule matches 
 * For scripts > ~50 lines or anything user-facing, prefer the stdlib **`logging`** module over `print`. `print` is fine for short one-shot scripts.
 * Don't introduce `loguru` or other logging libraries unless the project already uses one.
 
-## Domain-Specific Ask Triggers
+## Pre-flight Checks (read project, don't ask)
 
-Cases in general Python work where the answer would change the approach:
+Infer from the project before writing code — only ask if there's a genuine conflict:
 
-* "Which GUI toolkit is this?" — only when imports are ambiguous or the project mixes toolkits
-* "Should I add tests?" — only when pytest is already set up and the task is non-trivial logic
-* "Which Python version?" — only when introducing syntax that's version-sensitive and `pyproject.toml` doesn't make it clear
+* **GUI toolkit** — read existing imports; match what's there. Only ask if the project mixes toolkits with no clear convention
+* **Python version** — check `pyproject.toml` `requires-python`; pick syntax that fits. No need to confirm
+* **Tests** — if pytest is already set up and the change is non-trivial logic, add a test alongside. If pytest isn't set up, don't introduce it on your own

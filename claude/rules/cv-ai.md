@@ -61,11 +61,11 @@ Code may need to run on **both desktop GPU and edge devices**. Assume both unles
 * When a project targets **both desktop and edge**, confirm whether it's one shared model script with a runtime-resolved device, or two separate code paths. This affects how device abstraction and export code are structured — don't assume.
 * Quantization, pruning, and graph optimization are **target-specific** and lossy. Don't apply them without confirming the target's tolerance.
 
-## Domain-Specific Ask Triggers
+## Pre-flight Checks (assume both targets, don't ask)
 
-Cases in CV/ML work where the answer would change the approach:
+Default assumptions — proceed without asking, state the assumption in the response if it shaped the code:
 
-* "Is this for desktop or edge?" — when the change touches device selection, memory layout, or any cv2 call that might be on a vendor fork
-* "Which export format?" — only when generating deployment code
-* "Should I log to W&B?" — only when adding metrics / tracking, not for training-loop refactors
-* "Which dataset path / split?" — only when the change requires running training or inference end-to-end
+* **Device target** — assume both desktop and edge unless the codebase makes one obvious. Use `torch.device('cuda' if torch.cuda.is_available() else 'cpu')`, never hardcode `.cuda()`. No need to ask "desktop or edge?"
+* **Dataset path** — read from CLI flag / env var / config. Pick a sensible default, document it; don't ask the user to specify before writing code
+* **W&B / experiment tracking** — do NOT add `wandb.init()` on your own initiative. Structure code so logging is easy to add later, but leave it out
+* **Export format** — only relevant when generating deployment code. If you reach that point with no signal in the project, then ask

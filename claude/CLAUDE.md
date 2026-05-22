@@ -10,11 +10,9 @@
 * **Do not mix English into responses** unless I explicitly ask.
 * **All code (identifiers, comments, docstrings) and commit messages must be written in English.**
 * Response style: **clear, concise, and actionable**. For long answers, start with a **Summary** section and then expand.
-* Default to **best-effort with stated assumptions**. **Stop and ask** only when:
-  (a) multiple reasonable interpretations exist — list them, don't silently pick one;
-  (b) the action is irreversible or affects shared state (re-flash, lost calibration, migration, CI, shared infra);
-  (c) success criteria are unclear — ask for the verification condition before implementing.
-* For ambiguous tasks ("fix the bug", "improve X"), **restate the goal as a verifiable condition** before coding (e.g., "I'll write a failing test that reproduces it, then make it pass").
+* **Default: act, don't ask.** Proceed best-effort and state any non-obvious assumptions in the response. Don't restate the goal back at me, don't list interpretations for confirmation, don't ask for verification criteria up front — just do it and tell me what you assumed.
+* **The one hard stop:** if the action is **irreversible or affects shared state** (re-flash production boards, erase calibration / fuses, DB migration on shared infra, force-push to a shared branch, modify CI), confirm before acting.
+* **Soft check (rare):** if two interpretations would lead to **substantially different implementations** (not just different variable names — different files touched, different architecture), pick the more likely one, do it, and flag the alternative in your response. Only ask first if you genuinely can't rank them.
 
 ## 2) Coding Style & Change Discipline (language-agnostic)
 
