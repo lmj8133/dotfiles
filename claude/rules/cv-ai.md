@@ -7,7 +7,9 @@ trigger: Python files importing torch, cv2, tensorflow; training / inference scr
 
 ## Environment & Dependencies
 
+<!-- UV_ONLY_START -->
 * **Python toolchain: uv** (per global §5). Use `uv run python <script>.py` and `uv add <pkg>`; do not invent `pip install` instructions unless the project clearly uses pip directly.
+<!-- UV_ONLY_END -->
 * Pin major frameworks (`torch`, `numpy`, `opencv-python`) in `pyproject.toml`. CUDA-bound packages (`torch`) are version-sensitive — do not bump them as a side effect of unrelated work.
 
 ## Deployment Targets — Desktop GPU vs Edge

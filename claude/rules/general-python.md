@@ -7,16 +7,20 @@ trigger: Fallback for Python work — applies when no other Python rule matches 
 
 ## Environment & Dependencies
 
+<!-- UV_ONLY_START -->
 * **Python toolchain: uv** (per global §5).
   * Run: `uv run python <script>.py`
   * Add deps: `uv add <pkg>`
   * One-off tools: `uvx <tool>`
+<!-- UV_ONLY_END -->
 * Pin runtime deps in `pyproject.toml`. Do not bump versions as a side effect of unrelated work.
 
 ## Linting & Formatting
 
 * **Default lint stack: `ruff` (check + format) and `mypy`.** Matches what the `/review` skill enforces.
+<!-- UV_ONLY_START -->
 * Run via uvx without project-local install: `uvx ruff check .`, `uvx ruff format .`, `uvx mypy .`.
+<!-- UV_ONLY_END -->
 * When writing new code, write it **clean enough to pass ruff defaults** — don't rely on the user running format afterward.
 
 ## Type Hints

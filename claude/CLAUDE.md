@@ -37,9 +37,11 @@
 
 ## 5) Tooling Preferences
 
+<!-- UV_ONLY_START -->
 * **Python (uv toolchain)**
   * Run scripts: `uv run python <script>.py`
   * One-off tools: `uvx <tool>` (e.g., `uvx ruff --version`)
+<!-- UV_ONLY_END -->
 * **Cross-platform**: keep shell commands copy-pasteable across macOS/Linux/WSL; note platform caveats.
 
 ## 6) Git Commit Rules
