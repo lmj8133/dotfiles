@@ -1,0 +1,15 @@
+[project]
+name = "pdf-snip"
+version = "0.1.0"
+description = "MCP server: snip a region of a PDF page (figure, table, equation, anything) to PNG, with a browser GUI for the user to confirm the bounding box."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "mcp[cli]>=1.27.0",
+    "pymupdf>=1.27.2.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

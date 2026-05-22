@@ -30,7 +30,12 @@ Check for marker files to determine the project language(s):
 
 | Marker File | Language | Automated Tools |
 |-------------|----------|-----------------|
+<!-- UV_ONLY_START -->
 | `pyproject.toml`, `setup.py`, `requirements.txt` | Python | `uvx ruff check .`, `uvx ruff format --check .`, `uvx mypy .`, `pytest -q` |
+<!-- UV_ONLY_END -->
+<!-- UV_FREE_START -->
+| `pyproject.toml`, `setup.py`, `requirements.txt` | Python | `ruff check .`, `ruff format --check .`, `mypy .`, `pytest -q` |
+<!-- UV_FREE_END -->
 | `package.json` | Node/JS/TS | `npm run lint`, `npm test` |
 | `go.mod` | Go | `go vet ./...`, `go test ./...` |
 | `Cargo.toml` | Rust | `cargo clippy`, `cargo test` |

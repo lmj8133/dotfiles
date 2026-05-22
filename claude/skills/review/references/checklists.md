@@ -7,12 +7,22 @@ Reference file for the review skill. Load only when needed for detailed checks.
 ## Python
 
 ### Automated Tools
+<!-- UV_ONLY_START -->
 ```bash
 uvx ruff check .          # linting
 uvx ruff format --check . # formatting
 uvx mypy .                # type checking
 pytest -q                 # tests
 ```
+<!-- UV_ONLY_END -->
+<!-- UV_FREE_START -->
+```bash
+ruff check .              # linting
+ruff format --check .     # formatting
+mypy .                    # type checking
+pytest -q                 # tests
+```
+<!-- UV_FREE_END -->
 
 ### Manual Checks
 - [ ] Type hints on public function signatures

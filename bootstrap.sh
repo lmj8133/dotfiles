@@ -97,6 +97,32 @@ PKG_MANAGER=$(detect_package_manager)
 echo "[INFO] Detected package manager: $PKG_MANAGER"
 
 # ============================
+#  Python toolchain mode
+# ============================
+detect_python_mode() {
+  # Non-interactive override: DOTFILES_PYTHON_MODE=uv|syspython
+  if [[ -n "${DOTFILES_PYTHON_MODE:-}" ]]; then
+    echo "$DOTFILES_PYTHON_MODE"
+    return
+  fi
+  local default="uv"
+  command -v uv &>/dev/null || default="syspython"
+  echo "" >&2
+  echo ">>> Python toolchain <<<" >&2
+  echo "  [1] uv  (recommended for dev machines)" >&2
+  echo "  [2] syspython  (system Python, no uv)" >&2
+  echo "" >&2
+  local choice
+  read -r -p "Select Python mode [default: $default]: " choice
+  case "$choice" in
+    2|syspython|sys) echo "syspython" ;;
+    *)               echo "uv" ;;
+  esac
+}
+PYTHON_MODE=$(detect_python_mode)
+echo "[INFO] Python mode: $PYTHON_MODE"
+
+# ============================
 #  Helper functions
 # ============================
 check_package() {
@@ -169,6 +195,45 @@ clone_if_missing() {
   else
     git clone --depth=1 "$repo_url" "$dir_name"
   fi
+}
+
+# ============================
+#  Claude config deployment (python-mode aware)
+# ============================
+# Strip UV_ONLY / UV_FREE sentinel blocks from a deployed ~/.claude file.
+# uv mode:       remove sentinel lines only, keep UV_ONLY content, remove UV_FREE content.
+# syspython mode: remove UV_ONLY content entirely, keep UV_FREE content (sentinels removed).
+strip_uv_sentinels() {
+  local file="$1"
+  if [[ "$PYTHON_MODE" == "syspython" ]]; then
+    sed -i '/<!-- UV_ONLY_START -->/,/<!-- UV_ONLY_END -->/d' "$file"
+    sed -i '/<!-- UV_FREE_START -->/d; /<!-- UV_FREE_END -->/d' "$file"
+  else
+    sed -i '/<!-- UV_ONLY_START -->/d; /<!-- UV_ONLY_END -->/d' "$file"
+    sed -i '/<!-- UV_FREE_START -->/,/<!-- UV_FREE_END -->/d' "$file"
+  fi
+}
+
+CLAUDE_FILES_WITH_UV=(
+  "claude/CLAUDE.md"
+  "claude/rules/general-python.md"
+  "claude/rules/cv-ai.md"
+  "claude/skills/review/SKILL.md"
+  "claude/skills/review/references/checklists.md"
+)
+
+deploy_claude_files() {
+  mkdir -p "$HOME/.claude"
+  cp -r ./claude/* "$HOME/.claude/"
+  echo "[INFO] Copied ./claude/* -> ~/.claude/"
+  echo "[INFO] Stripping UV sentinels (mode: $PYTHON_MODE)..."
+  for rel_path in "${CLAUDE_FILES_WITH_UV[@]}"; do
+    local dest="$HOME/.claude/${rel_path#claude/}"
+    if [[ -f "$dest" ]]; then
+      strip_uv_sentinels "$dest"
+      echo "[INFO]   Processed: $dest"
+    fi
+  done
 }
 
 # ============================
@@ -743,9 +808,7 @@ fi
 # ============================
 #  Claude Code config
 # ============================
-mkdir -p "$HOME/.claude"
-cp -r ./claude/* "$HOME/.claude/"
-echo "[INFO] Copied ./claude/* -> ~/.claude/"
+deploy_claude_files
 
 # ============================
 #  Anthropic Skills Repository
@@ -891,11 +954,89 @@ fi
 # ============================
 #  UV (Python toolchain)
 # ============================
-if command -v uv &> /dev/null; then
-  echo "[INFO] uv already installed, skip"
+if [[ "$PYTHON_MODE" == "uv" ]]; then
+  if command -v uv &> /dev/null; then
+    echo "[INFO] uv already installed, skip"
+  else
+    echo "[INFO] Installing uv (Python toolchain)"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  fi
+  # Make sure subsequent steps in this script can find uv even on the
+  # very first run (its installer puts the binary in ~/.local/bin but
+  # doesn't relaunch the shell to update PATH).
+  export PATH="$HOME/.local/bin:$PATH"
 else
-  echo "[INFO] Installing uv (Python toolchain)"
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  echo "[INFO] syspython mode: skipping uv installation"
+fi
+
+# ============================
+#  MCP servers — pdf_snip
+# ============================
+if [[ -d ./mcp/pdf_snip ]]; then
+  echo "[INFO] Setting up pdf_snip MCP server..."
+
+  # Resolve the absolute path of the dotfiles root so the MCP config
+  # snippet can point at it from anywhere on the filesystem.
+  DOTFILES_ROOT="$(pwd)"
+
+  # 1. Pre-sync the venv so the first MCP launch isn't slow.
+  if [[ "$PYTHON_MODE" == "uv" ]]; then
+    if command -v uv &>/dev/null; then
+      ( cd ./mcp/pdf_snip && uv sync ) \
+        || echo "[WARN] uv sync for pdf_snip failed (non-fatal)"
+    else
+      echo "[WARN] uv not on PATH — skipping pdf_snip venv sync"
+    fi
+  else
+    if command -v pip3 &>/dev/null; then
+      ( cd ./mcp/pdf_snip && pip3 install -q mcp pymupdf ) \
+        || echo "[WARN] pip3 install for pdf_snip failed (non-fatal)"
+    else
+      echo "[WARN] pip3 not found — skipping pdf_snip dep install"
+    fi
+  fi
+
+  # 2. Merge the MCP config snippet into ~/.claude.json (requires jq).
+  CLAUDE_JSON="$HOME/.claude.json"
+  SNIPPET="./mcp/pdf_snip/mcp_config_snippet.json"
+  if [[ -f "$SNIPPET" ]]; then
+    if ! command -v jq &>/dev/null; then
+      echo "[WARN] jq is not installed — cannot merge pdf_snip into $CLAUDE_JSON"
+      echo "       Install jq and re-run bootstrap, or add the entry manually:"
+      echo "       (snippet at $SNIPPET, replace __DOTFILES__ with $DOTFILES_ROOT)"
+    else
+      # Render the snippet with the actual dotfiles path.
+      if [[ "$PYTHON_MODE" == "syspython" ]]; then
+        RENDERED=$(jq --arg root "$DOTFILES_ROOT" '
+          .mcpServers["pdf-snip"].command = "python3" |
+          .mcpServers["pdf-snip"].args = [$root + "/mcp/pdf_snip/server.py"]
+        ' "$SNIPPET")
+      else
+        RENDERED=$(sed "s|__DOTFILES__|$DOTFILES_ROOT|g" "$SNIPPET")
+      fi
+
+      # If ~/.claude.json doesn't exist yet, start from {}.
+      if [[ ! -f "$CLAUDE_JSON" ]]; then
+        echo "{}" > "$CLAUDE_JSON"
+      fi
+
+      # Merge: existing config wins, but pdf-snip entry is set
+      # unconditionally (so re-running picks up path / arg changes).
+      # We tolerate failures (set -e is on) — the user can hand-edit.
+      if jq --argjson new "$RENDERED" '
+            .mcpServers = ((.mcpServers // {}) + $new.mcpServers)
+          ' "$CLAUDE_JSON" > "$CLAUDE_JSON.tmp" \
+        && mv "$CLAUDE_JSON.tmp" "$CLAUDE_JSON"; then
+        echo "[INFO] Merged pdf-snip into $CLAUDE_JSON"
+      else
+        rm -f "$CLAUDE_JSON.tmp"
+        echo "[WARN] Failed to merge pdf-snip into $CLAUDE_JSON"
+        echo "       (jq error or write permission?). You can paste the"
+        echo "       snippet manually after replacing __DOTFILES__:"
+        echo "       $SNIPPET"
+      fi
+    fi
+  fi
 fi
 
 # ============================
@@ -919,6 +1060,7 @@ echo " - nvm + Node 22 + tree-sitter-cli"
 echo " - emojify (git log emoji renderer)"
 echo " - RTK (Claude Code token optimizer)"
 echo " - uv (Python toolchain)"
+echo " - pdf-snip MCP server (mcp/pdf_snip)"
 echo " - fd-find, ripgrep, fzf, zoxide"
 echo " - Locale: en_US.UTF-8"
 if [[ "$HAS_SUDO" == false && "$PKG_MANAGER" != "brew" ]]; then

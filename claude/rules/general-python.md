@@ -7,16 +7,20 @@ trigger: Fallback for Python work — applies when no other Python rule matches 
 
 ## Environment & Dependencies
 
+<!-- UV_ONLY_START -->
 * **Python toolchain: uv** (per global §5).
   * Run: `uv run python <script>.py`
   * Add deps: `uv add <pkg>`
   * One-off tools: `uvx <tool>`
+<!-- UV_ONLY_END -->
 * Pin runtime deps in `pyproject.toml`. Do not bump versions as a side effect of unrelated work.
 
 ## Linting & Formatting
 
 * **Default lint stack: `ruff` (check + format) and `mypy`.** Matches what the `/review` skill enforces.
+<!-- UV_ONLY_START -->
 * Run via uvx without project-local install: `uvx ruff check .`, `uvx ruff format .`, `uvx mypy .`.
+<!-- UV_ONLY_END -->
 * When writing new code, write it **clean enough to pass ruff defaults** — don't rely on the user running format afterward.
 
 ## Type Hints
@@ -56,10 +60,10 @@ trigger: Fallback for Python work — applies when no other Python rule matches 
 * For scripts > ~50 lines or anything user-facing, prefer the stdlib **`logging`** module over `print`. `print` is fine for short one-shot scripts.
 * Don't introduce `loguru` or other logging libraries unless the project already uses one.
 
-## Domain-Specific Ask Triggers
+## Pre-flight Checks (read project, don't ask)
 
-Cases in general Python work where the answer would change the approach:
+Infer from the project before writing code — only ask if there's a genuine conflict:
 
-* "Which GUI toolkit is this?" — only when imports are ambiguous or the project mixes toolkits
-* "Should I add tests?" — only when pytest is already set up and the task is non-trivial logic
-* "Which Python version?" — only when introducing syntax that's version-sensitive and `pyproject.toml` doesn't make it clear
+* **GUI toolkit** — read existing imports; match what's there. Only ask if the project mixes toolkits with no clear convention
+* **Python version** — check `pyproject.toml` `requires-python`; pick syntax that fits. No need to confirm
+* **Tests** — if pytest is already set up and the change is non-trivial logic, add a test alongside. If pytest isn't set up, don't introduce it on your own

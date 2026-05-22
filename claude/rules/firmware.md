@@ -65,11 +65,12 @@ These trigger global rule §1(b) (irreversible or affects shared state) — conf
 * Modifying bootloader or DFU paths
 * Bumping any toolchain / SDK version that other team members share
 
-## Domain-Specific Ask Triggers
+## Pre-flight Checks (read code, don't ask)
 
-Cases in firmware work where the answer would change the approach:
+Before writing firmware code, infer these from the existing project — only ask if the codebase genuinely has no signal:
 
-* "Is there an RTOS?" — only when the change involves blocking calls, shared state, or anything that could run in ISR context
-* "What's the register access convention?" — only when introducing access to a peripheral that has no existing pattern in this file
-* "How will you verify?" — only when the change is non-trivial and I need to shape it for your verification path
-* "Is dynamic memory allowed?" — only when I'd otherwise reach for `malloc`
+* **RTOS or bare-metal** — check `main.c` / startup code; relevant when touching blocking calls, shared state, or ISR-context code
+* **Register access convention** — match the surrounding file's existing pattern (CMSIS / vendor HAL / direct pointer / in-house wrapper)
+* **Dynamic memory** — grep for `malloc` / `free`; if absent, default to static / pool-only
+
+Verification path (re-flash + UART log vs. ICE step-through vs. host unit test) is the user's call — state your assumption in the response, don't ask.

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.venv-*
+
+# pytest
+.pytest_cache/
+
+# Per-project Claude Code state (per machine)
+.claude/
+
+# Local working files
+test_output/
+GT/
+scripts/_*
