@@ -16,13 +16,14 @@ flowcharts, or any region the user can see in the PDF.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 import fitz
 from mcp.server.fastmcp import FastMCP
 
-from core import find_caption_bboxes, find_clip_for_caption, normalize_query
+from core import Kind, find_caption_bboxes, find_clip_for_caption, normalize_query
 from gui import ensure_server_running, get_queue
 
 mcp = FastMCP("pdf-snip")
@@ -30,8 +31,8 @@ mcp = FastMCP("pdf-snip")
 
 def _heuristic_suggestion(
     doc: fitz.Document,
-    pattern,
-    kind: str,
+    pattern: re.Pattern[str],
+    kind: Kind,
 ) -> tuple[int, fitz.Rect | None]:
     """Run the heuristic to locate the page and a candidate clip rect.
 

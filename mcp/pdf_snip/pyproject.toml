@@ -11,5 +11,16 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "mypy>=1.19.0",
     "pytest>=9.0.3",
 ]
+
+# mypy needs the project venv to resolve imports (fitz, mcp), so run it
+# as `uv run mypy .` rather than `uvx mypy .`.
+[tool.mypy]
+
+[[tool.mypy.overrides]]
+# PyMuPDF ships no type stubs (no py.typed marker); silence only its
+# import errors so real type errors stay visible.
+module = ["fitz", "fitz.*"]
+ignore_missing_imports = true
