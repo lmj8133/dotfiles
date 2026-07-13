@@ -36,8 +36,25 @@ on the wrong one.
 - Live cropped preview with eraser preview applied
 - Page navigation (prev / next / jump-to-page) for when the heuristic
   lands on the wrong page
-- Single persistent browser tab — reused across calls within one MCP
-  session
+- Single persistent browser tab — reused across calls, and (thanks to
+  the fixed default port plus an epoch-based resync in `/poll`) across
+  MCP sessions too. A new tab is only opened when no tab is connected.
+
+## Configuration
+
+Environment variables (set them in the `env` block of the MCP server
+entry in `~/.claude.json`):
+
+- `PDF_SNIP_PORT` — preferred GUI port, default `7860`. If taken
+  (e.g. a second concurrent session), the server falls back to the
+  next free port within +100. A stable port is what lets a tab from a
+  previous session reconnect instead of piling up dead tabs.
+- `PDF_SNIP_AUTO_OPEN` — default on. The browser is launched only
+  when no GUI tab has polled the server recently (~30 s), so an
+  existing tab is never duplicated. Set to `0` to never launch a
+  browser. In every mode the server writes its actual URL to
+  `/tmp/pdf_snip_url.txt` at startup, and the tool description asks
+  the assistant to show the URL to you.
 
 ## Install
 

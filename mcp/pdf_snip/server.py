@@ -70,11 +70,11 @@ def pdf_snip(
 ) -> str:
     """Snip a rectangular region of a PDF page and save it as a PNG.
 
-    HUMAN-IN-THE-LOOP — each call opens a browser GUI and BLOCKS
-    until the user manually adjusts the crop box and clicks Confirm
-    (typical wall time: 30-90 seconds). Do not call this tool in
-    bulk loops, retries, or speculative attempts. Treat each call as
-    interrupting the user.
+    HUMAN-IN-THE-LOOP — each call sends the page to a browser GUI
+    and BLOCKS until the user manually adjusts the crop box and
+    clicks Confirm (typical wall time: 30-90 seconds). Do not call
+    this tool in bulk loops, retries, or speculative attempts. Treat
+    each call as interrupting the user.
 
     USE THIS WHEN:
       - The user has asked for a figure/table/diagram from a PDF and
@@ -93,15 +93,23 @@ def pdf_snip(
     HOW IT WORKS:
       1. A heuristic tries to locate the page from `caption_hint`
          (e.g. "Figure 2.29") and proposes a bounding box.
-      2. The browser GUI opens with that page and a suggested box.
+      2. The browser GUI shows that page with a suggested box.
       3. The user can navigate to a different page, drag the box,
          add eraser rectangles to mask unrelated content, then click
          Confirm.
       4. The cropped PNG is written to `output_path`.
 
-    The GUI runs on localhost; on first call the user's browser is
-    opened automatically. Subsequent calls reuse the same browser
-    tab (no extra setup).
+    The GUI runs on localhost — http://127.0.0.1:7860/ by default
+    (port configurable via the PDF_SNIP_PORT env var). A browser tab
+    is opened automatically ONLY when no GUI tab is currently
+    connected; an already-open tab — including one left over from a
+    previous session — is reused. When you call this tool, tell the
+    user the GUI URL in your message so they can switch to the tab
+    (or open the URL themselves if nothing pops up). If the default
+    port was taken (e.g. a second concurrent session), the server
+    falls back to a nearby port and opens a tab there automatically;
+    the actual URL is always written to /tmp/pdf_snip_url.txt.
+    Setting PDF_SNIP_AUTO_OPEN=0 disables automatic opening entirely.
 
     Args:
         pdf_path: Absolute path to the source PDF. Must already
@@ -167,14 +175,19 @@ def pdf_snip(
     )
 
     queue = get_queue()
-    job = queue.submit_job(
-        pdf_path=str(pdf),
-        figure_id=caption_hint,
-        page_index=page_index,
-        suggested_bbox_pt=suggested,
-        render_dpi=review_dpi,
-        timeout_s=timeout_s,
-    )
+    try:
+        job = queue.submit_job(
+            pdf_path=str(pdf),
+            figure_id=caption_hint,
+            page_index=page_index,
+            suggested_bbox_pt=suggested,
+            render_dpi=review_dpi,
+            timeout_s=timeout_s,
+        )
+    except TimeoutError as exc:
+        # Most likely the user never saw the GUI; make the URL part of
+        # the error so the next attempt can point them at it.
+        raise TimeoutError(f"{exc} — GUI URL: {url}") from exc
 
     # Render the final PNG using the user's confirmed bbox + erasers.
     out_path = Path(output_path).expanduser().resolve()

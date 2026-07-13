@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import socket
+import sys
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -155,14 +158,73 @@ _server_thread: threading.Thread | None = None
 _server_port: int | None = None
 _server_lock = threading.Lock()
 
+# Identifies this server process. Sent in every /poll response and echoed
+# back by the client, so a tab left over from a previous server process
+# (whose job ids restarted at 1) can detect the restart and resync its
+# `since` watermark instead of silently never matching a job again.
+_EPOCH = uuid.uuid4().hex[:12]
+
+# time.monotonic() of the most recent /poll request. Used to decide
+# whether a GUI tab is currently connected (idle tabs long-poll every
+# ~25 s, so anything within CLIENT_ALIVE_S counts as alive).
+_last_poll_at: float | None = None
+CLIENT_ALIVE_S = 30.0
+
+# time.monotonic() of the last browser launch we triggered, so two
+# near-simultaneous tool calls don't each open a tab while the first
+# one is still loading.
+_last_browser_open_at: float | None = None
+
+# time.monotonic() of server start; bounds the reconnect grace wait.
+_server_started_at: float | None = None
+
+# Serialises the "is a tab connected? if not, open one" decision so
+# concurrent tool calls can't both conclude "no tab" and open twice.
+_open_lock = threading.Lock()
+
 
 def get_queue() -> JobQueue:
     return _queue
 
 
-def _find_free_port(start: int = 7860, end: int = 7960) -> int:
+def _preferred_port() -> int:
+    """Port to try first: PDF_SNIP_PORT env var, default 7860.
+
+    A stable port is what lets a browser tab from a previous session
+    reconnect to the next session's server.
+    """
+    raw = os.environ.get("PDF_SNIP_PORT", "").strip()
+    if not raw:
+        return 7860
+    try:
+        port = int(raw)
+    except ValueError:
+        port = -1
+    if not 1024 <= port <= 65535:
+        print(
+            f"[pdf_snip] ignoring invalid PDF_SNIP_PORT={raw!r}, using 7860",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 7860
+    return port
+
+
+def _find_free_port(start: int = 7860, end: int | None = None) -> int:
+    if end is None:
+        end = min(start + 100, 65536)
     for port in range(start, end):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            # Match HTTPServer.allow_reuse_address, or TIME_WAIT leftovers
+            # from a previous session's server (killed while a tab was
+            # connected) would push us off the stable port that the tab
+            # is trying to reconnect to. On Linux/macOS a port with a
+            # live listener still fails the probe (SO_REUSEADDR is not
+            # SO_REUSEPORT). Skip it on Windows, where WinSock's
+            # SO_REUSEADDR WOULD bind over a live listener; Windows
+            # allows rebinding through TIME_WAIT without it anyway.
+            if sys.platform != "win32":
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 s.bind(("127.0.0.1", port))
                 return port
@@ -177,32 +239,98 @@ URL_HINT_FILE = Path("/tmp/pdf_snip_url.txt")
 def ensure_server_running() -> str:
     """Start the HTTP server if needed and return the URL.
 
-    On first start, opens the URL in the user's default browser. If the
-    automatic launch fails (headless server, no DISPLAY), writes the
-    URL to /tmp/pdf_snip_url.txt so the user can retrieve it.
+    The browser is only opened when no GUI tab is connected: a tab left
+    over from a previous server process reconnects on its own (see the
+    epoch resync in /poll), so in the common case the same tab is
+    reused across sessions and no new window is opened. With
+    PDF_SNIP_AUTO_OPEN=0 the browser is never opened. Either way the
+    actual URL (which may differ from the preferred port if it was
+    taken) is written to /tmp/pdf_snip_url.txt on startup.
     """
-    global _server, _server_thread, _server_port
+    global _server, _server_thread, _server_port, _server_started_at
     first_start = False
     with _server_lock:
         if _server is None:
-            port = _find_free_port()
-            httpd = ThreadingHTTPServer(("127.0.0.1", port), _Handler)
+            httpd = ThreadingHTTPServer(
+                ("127.0.0.1", _find_free_port(_preferred_port())), _Handler
+            )
             httpd.daemon_threads = True
             thread = threading.Thread(target=httpd.serve_forever, daemon=True)
             thread.start()
             _server = httpd
             _server_thread = thread
-            _server_port = port
+            _server_port = httpd.server_address[1]
+            _server_started_at = time.monotonic()
             first_start = True
         url = f"http://127.0.0.1:{_server_port}/"
     if first_start:
-        opened = _try_open_browser(url)
-        if not opened:
-            try:
-                URL_HINT_FILE.write_text(url + "\n", encoding="utf-8")
-            except OSError:
-                pass
+        _write_url_hint(url)
+    if not _auto_open_enabled():
+        return url
+    with _open_lock:
+        _wait_for_first_poll()
+        if _should_open_browser():
+            _note_browser_open()
+            _try_open_browser(url)
     return url
+
+
+def _auto_open_enabled() -> bool:
+    """Whether we may launch the user's browser (PDF_SNIP_AUTO_OPEN).
+
+    Enabled unless set to 0 / false / no (case-insensitive).
+    """
+    value = os.environ.get("PDF_SNIP_AUTO_OPEN", "1").strip().lower()
+    return value not in ("0", "false", "no")
+
+
+def _note_client_poll() -> None:
+    global _last_poll_at
+    _last_poll_at = time.monotonic()
+
+
+def _client_recently_polled() -> bool:
+    return (
+        _last_poll_at is not None and time.monotonic() - _last_poll_at < CLIENT_ALIVE_S
+    )
+
+
+def _wait_for_first_poll(grace_s: float = 2.5) -> None:
+    """Shortly after server start, give a tab from a previous session a
+    moment to reconnect (it retries /poll every 2 s) before deciding
+    that no tab exists and a browser launch is needed. The wait is
+    bounded by server age, so across all callers it is paid at most
+    once per process — the first-launch latency when no tab exists."""
+    if _server_started_at is None:
+        return
+    deadline = _server_started_at + grace_s
+    while _last_poll_at is None and time.monotonic() < deadline:
+        time.sleep(0.15)
+
+
+def _should_open_browser() -> bool:
+    if _client_recently_polled():
+        return False
+    # A tab we just launched may still be loading and not polling yet;
+    # don't stack a second one on top of it.
+    if (
+        _last_browser_open_at is not None
+        and time.monotonic() - _last_browser_open_at < 10.0
+    ):
+        return False
+    return True
+
+
+def _note_browser_open() -> None:
+    global _last_browser_open_at
+    _last_browser_open_at = time.monotonic()
+
+
+def _write_url_hint(url: str) -> None:
+    try:
+        URL_HINT_FILE.write_text(url + "\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _try_open_browser(url: str) -> bool:
@@ -298,11 +426,22 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/poll":
             since = int(params.get("since", ["0"])[0])
             timeout = float(params.get("timeout", ["25"])[0])
+            client_epoch = params.get("epoch", [None])[0]
+            if client_epoch is not None and client_epoch != _EPOCH:
+                # Tab from a previous server process: its job-id
+                # watermark is meaningless here (ids restarted at 1),
+                # so treat it as having seen nothing yet. Clients that
+                # never send an epoch (pre-epoch app.js) keep their
+                # since untouched — forcing 0 would hand them the
+                # active job on every poll in a tight re-render loop.
+                since = 0
+            _note_client_poll()
             job = _queue.wait_for_job(since, timeout_s=timeout)
+            _note_client_poll()  # still connected after the long-poll hold
             if job is None:
-                self._send_json(200, {"job": None})
+                self._send_json(200, {"job": None, "epoch": _EPOCH})
                 return
-            self._send_json(200, {"job": job.to_client()})
+            self._send_json(200, {"job": job.to_client(), "epoch": _EPOCH})
             return
         if path == "/render":
             self._handle_render(params)
@@ -340,7 +479,19 @@ class _Handler(BaseHTTPRequestHandler):
         body = path.read_bytes()
         self._send_bytes(200, content_type, body)
 
+    def _check_epoch(self, params: dict[str, list[str]]) -> bool:
+        """Reject job-scoped requests from a stale tab. Job ids restart
+        at 1 per process, so after a restart on the same port a stale
+        tab's ids collide with the new process's — acting on them would
+        render/confirm/cancel the wrong session's job."""
+        if params.get("epoch", [None])[0] != _EPOCH:
+            self._send_error_json(409, "stale client epoch — reload the GUI page")
+            return False
+        return True
+
     def _handle_render(self, params: dict[str, list[str]]) -> None:
+        if not self._check_epoch(params):
+            return
         job_id = int(params.get("job", ["0"])[0])
         page_arg = params.get("page", [None])[0]
         dpi_arg = params.get("dpi", [None])[0]
@@ -374,6 +525,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_error_json(500, f"render failed: {exc}")
 
     def _handle_submit(self, params: dict[str, list[str]]) -> None:
+        if not self._check_epoch(params):
+            return
         job_id = int(params.get("job", ["0"])[0])
         job = _queue.get_active_by_id(job_id)
         if job is None:
@@ -400,6 +553,8 @@ class _Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True})
 
     def _handle_cancel(self, params: dict[str, list[str]]) -> None:
+        if not self._check_epoch(params):
+            return
         job_id = int(params.get("job", ["0"])[0])
         job = _queue.get_active_by_id(job_id)
         if job is None:

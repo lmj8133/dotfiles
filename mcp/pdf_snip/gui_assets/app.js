@@ -42,6 +42,7 @@
   let pageWPt = 0;
   let pageHPt = 0;
   let lastPolledJobId = 0;
+  let serverEpoch = null;  // identifies the server process; see pollLoop
   let erasers = [];        // {id, x, y, w, h, color}  -- coords in image px
   let nextEraserId = 1;
 
@@ -54,12 +55,20 @@
   async function pollLoop() {
     while (true) {
       try {
-        const r = await fetch(`/poll?since=${lastPolledJobId}&timeout=25`);
+        const r = await fetch(
+          `/poll?since=${lastPolledJobId}&timeout=25&epoch=${serverEpoch || ''}`);
         if (!r.ok) {
           await sleep(2000);
           continue;
         }
         const data = await r.json();
+        if (data.epoch && data.epoch !== serverEpoch) {
+          // New server process (MCP session restarted): job ids were
+          // reset, so our watermark is stale. The server already treats
+          // the mismatched epoch as since=0; resync to match.
+          serverEpoch = data.epoch;
+          lastPolledJobId = 0;
+        }
         if (data.job) {
           loadJob(data.job);
           lastPolledJobId = data.job.job_id;
@@ -97,7 +106,8 @@
     currentPage = pageIndex;
     pageInput.value = pageIndex + 1;
     const url =
-      `/render?job=${job.job_id}&page=${pageIndex}&dpi=${job.render_dpi}`;
+      `/render?job=${job.job_id}&page=${pageIndex}&dpi=${job.render_dpi}` +
+      `&epoch=${serverEpoch}`;
     const resp = await fetch(url);
     if (!resp.ok) {
       alert(`render failed: ${resp.status}`);
@@ -394,7 +404,7 @@
       y1: (er.y + er.h) * sy,
       color: er.color,
     }));
-    const r = await fetch(`/submit?job=${job.job_id}`, {
+    const r = await fetch(`/submit?job=${job.job_id}&epoch=${serverEpoch}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -415,7 +425,9 @@
   async function cancel() {
     if (!job) return;
     if (!confirm_('Cancel this cut request? The MCP call will fail.')) return;
-    await fetch(`/cancel?job=${job.job_id}`, { method: 'POST' });
+    await fetch(`/cancel?job=${job.job_id}&epoch=${serverEpoch}`, {
+      method: 'POST',
+    });
     statusText.textContent = `Cancelled job #${job.job_id}. Waiting for next request…`;
     job = null;
     app.hidden = true;
