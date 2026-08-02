@@ -588,8 +588,15 @@ require("lazy").setup({
       vim.g.mkdp_refresh_slow = 0
       vim.g.mkdp_markdown_css = ''
       vim.g.mkdp_theme = 'dark'
-      vim.g.mkdp_browser = '' -- 系統預設瀏覽器
       vim.g.mkdp_port = 7777  -- 固定預覽埠，供（必要時）headless 印出
+
+      -- WSL：server 綁 0.0.0.0，Windows 端瀏覽器才連得到（WSL 的 loopback 不通）。
+      -- mkdp_browser 必須留空——插件在 WSL 下會改走 `cmd.exe /c start`，
+      -- 指定的 browser 會被當成 Windows 程式去找，填 wslview 反而會失敗。
+      vim.g.mkdp_browser = ''
+      if vim.fn.has('wsl') == 1 then
+        vim.g.mkdp_open_to_the_world = 1
+      end
       vim.g.mkdp_preview_options = {
         mkit = {}, katex = {}, uml = {}, maid = {},
         disable_sync_scroll = 0, sync_scroll_type = 'middle',
