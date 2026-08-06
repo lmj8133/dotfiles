@@ -18,7 +18,7 @@
 
 ## Prerequisites
 
-- **OS**: Ubuntu/Debian Linux, macOS, or WSL2
+- **OS**: Ubuntu/Debian Linux, macOS, WSL2, or Termux on Android (via proot-distro Ubuntu — see [Termux / Android](#termux--android-eg-ayn-thor))
 - **Permissions**: Script auto-detects if you need sudo
 - **Internet**: Required for downloading packages and plugins
 
@@ -67,6 +67,74 @@ When you first start Zsh, Powerlevel10k will run the configuration wizard. Follo
 
 ---
 
+## Termux / Android (e.g. AYN Thor)
+
+On Android the bootstrap builds a **two-layer setup**: a thin Termux host layer
+(sshd on port 8022, tmux, a `dev` helper, wake-lock management) and a
+**proot-distro Ubuntu 24.04 guest** that hosts the full dev environment plus
+the official Claude Code CLI. Claude Code has no Android build (its native
+binary needs glibc), but inside the proot guest the official installer works
+unmodified. No root required; everything lives inside Termux's app data and is
+fully removed by uninstalling Termux.
+
+### One-time device preparation
+
+1. Install Termux **from F-Droid or GitHub** (never Google Play). Optionally
+   also install the Termux:Boot app **and open it once** (Android only
+   delivers boot events to apps that have been launched at least once) so
+   sshd autostarts after a reboot.
+2. Disable the Android 12+ phantom process killer, which otherwise SIGKILLs
+   long-running tmux/proot sessions (run from a computer with adb access):
+
+   ```bash
+   adb shell "settings put global settings_enable_monitor_phantom_procs false"
+   adb shell "settings get global settings_enable_monitor_phantom_procs"  # expect: false
+   ```
+
+   The flag survives reboots. Revert anytime with
+   `adb shell settings delete global settings_enable_monitor_phantom_procs`.
+3. In Android settings, set Termux's battery usage to **Unrestricted**.
+
+### Install
+
+```bash
+pkg install -y git
+git clone https://github.com/lmj8133/dotfiles ~/dotfiles
+cd ~/dotfiles && ./bootstrap.sh
+```
+
+The script detects Termux, sets up the host layer, installs the Ubuntu guest,
+and re-runs itself inside the guest to install everything else (a first run
+downloads a few GB — keep the device on power).
+
+### Daily use
+
+- `dev` — attach the main tmux session; every window opens inside Ubuntu.
+  A wake-lock is held only while attached (idle device still deep-sleeps).
+  If you detach with work still running, run `termux-wake-lock` manually.
+- From a computer: `passwd` once in Termux, then
+  `ssh-copy-id -p 8022 <device-ip>` and `ssh -p 8022 <device-ip>`.
+- Claude Code login: if the browser OAuth callback fails, use the copy-URL /
+  paste-code fallback, or `claude setup-token`.
+
+### After every firmware OTA
+
+- Re-verify the phantom-procs flag (`settings get ...` should still be `false`).
+- Sanity-check proot performance (vendor updates have regressed it before).
+
+### Backup
+
+Archive the whole Ubuntu guest (container name `ubuntu-24.04`):
+
+```bash
+proot-distro backup --output /sdcard/ubuntu-24.04-backup.tar ubuntu-24.04
+```
+
+See `proot-distro backup --help` for compression options. The environment
+is also fully reproducible by re-running the bootstrap.
+
+---
+
 ## File Structure
 
 ```
@@ -94,6 +162,9 @@ dotfiles/
 │   └── tmux.conf        # Tmux config file
 ├── templates/           # Template files for various tools
 │   └── clangd/          # Clangd configuration templates
+├── termux/              # Termux host-layer files (Android)
+│   ├── dev              # tmux + proot-login + wake-lock session helper
+│   └── termux.properties  # Terminal settings (extra keys row)
 └── zsh/                 # Zsh configuration
     ├── zprofile         # Login-time environment (Homebrew, locale)
     ├── zshrc            # Interactive config (plugins, aliases, keybindings)

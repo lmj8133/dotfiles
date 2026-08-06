@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Open (or attach to) the main dev session inside the proot Ubuntu guest.
+#
+# Battery model: an Android wake-lock is held while a client is attached
+# and released when the LAST client detaches, so an idle device still
+# deep-sleeps. If you detach with work still running, run
+# `termux-wake-lock` manually to keep it alive.
+#
+# Usage: dev                 # attach or create the "main" session
+#        DEV_SESSION=x dev   # use a different tmux session name
+set -u
+
+CONTAINER="${DEV_CONTAINER:-ubuntu-24.04}"
+SESSION="${DEV_SESSION:-main}"
+# --shared-tmp (supported by proot-distro 4.x and 5.x) exposes Termux
+# $PREFIX/tmp as /tmp inside the guest.
+LOGIN_CMD="proot-distro login $CONTAINER --shared-tmp"
+
+release_lock_if_last() {
+  # The Termux wake-lock is a device-wide singleton — only release it
+  # when no client remains attached to the session.
+  if [ -z "$(tmux list-clients -t "$SESSION" 2>/dev/null)" ]; then
+    termux-wake-unlock 2>/dev/null || true
+    echo "[dev] wake-lock released (run termux-wake-lock to keep background work alive)"
+  fi
+}
+
+termux-wake-lock 2>/dev/null || true
+trap release_lock_if_last EXIT
+
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+  tmux new-session -d -s "$SESSION" "$LOGIN_CMD"
+  # Every window/pane created later in this session also lands in the guest.
+  tmux set-option -t "$SESSION" default-command "$LOGIN_CMD"
+fi
+tmux attach -t "$SESSION"

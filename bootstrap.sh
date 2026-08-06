@@ -2,6 +2,142 @@
 set -euo pipefail
 
 # ============================
+#  Environment detection: Termux host / proot guest / standard
+# ============================
+# DOTFILES_ENV=termux|proot|standard overrides detection (used when this
+# script chains itself into a proot guest, where heuristics can be thin).
+detect_environment() {
+  if [[ -n "${DOTFILES_ENV:-}" ]]; then
+    echo "$DOTFILES_ENV"
+    return
+  fi
+  # Termux: bionic userland on Android; the app exports TERMUX_VERSION.
+  if [[ -n "${TERMUX_VERSION:-}" || "$(uname -o 2>/dev/null)" == "Android" ]]; then
+    echo "termux"
+    return
+  fi
+  # proot guest (e.g. proot-distro Ubuntu inside Termux): glibc userland,
+  # but the Termux prefix stays visible and proot-distro >= 5.x fakes the
+  # kernel release string (e.g. "6.17.0-PRoot-Distro").
+  if [[ -d /data/data/com.termux/files/usr ]] \
+     || uname -r 2>/dev/null | grep -qiE -- '-android|proot'; then
+    echo "proot"
+    return
+  fi
+  echo "standard"
+}
+DOTFILES_ENV=$(detect_environment)
+echo "[INFO] Environment: $DOTFILES_ENV"
+
+# ============================
+#  Termux host layer (Android)
+# ============================
+# On Termux only a thin host layer is set up (sshd, tmux, dev helper,
+# proot-distro Ubuntu); the full dev environment is then installed by
+# re-running this script inside the proot guest.
+# proot-distro >= 5.x pulls OCI images; container names cannot contain
+# ':', so the image ref and the container name are kept separate.
+UBUNTU_IMAGE="ubuntu:24.04"
+UBUNTU_CONTAINER="ubuntu-24.04"
+
+run_termux_bootstrap() {
+  echo "[INFO] Termux detected — setting up Android host layer + proot Ubuntu"
+
+  # Host-layer files are referenced relative to the repo root
+  cd "$(dirname "${BASH_SOURCE[0]}")"
+
+  # pkg refreshes the apt index automatically before installing
+  pkg install -y proot-distro openssh tmux
+
+  # --- sshd (Termux compiles it for port 8022) ---
+  mkdir -p "$HOME/.ssh"
+  chmod 700 "$HOME/.ssh"
+  touch "$HOME/.ssh/authorized_keys"
+  chmod 600 "$HOME/.ssh/authorized_keys"
+  ssh-keygen -A 2>/dev/null || true  # host keys, no-op if they exist
+  if ! pgrep -x sshd >/dev/null 2>&1; then
+    sshd
+    echo "[INFO] sshd started on port 8022"
+  fi
+
+  # Autostart sshd at boot via the Termux:Boot app if it is installed.
+  # No wake-lock here — the dev helper holds one only during sessions.
+  mkdir -p "$HOME/.termux/boot"
+  cat > "$HOME/.termux/boot/start-sshd.sh" <<'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+sshd
+EOF
+  chmod +x "$HOME/.termux/boot/start-sshd.sh"
+
+  # --- terminal ergonomics ---
+  [[ -f ./tmux/tmux.conf ]] && cp ./tmux/tmux.conf "$HOME/.tmux.conf"
+  if [[ -f ./termux/termux.properties ]]; then
+    mkdir -p "$HOME/.termux"
+    cp ./termux/termux.properties "$HOME/.termux/termux.properties"
+    termux-reload-settings 2>/dev/null || true
+    echo "[INFO] Deployed termux.properties (extra keys row)"
+  fi
+
+  # --- dev helper (wake-lock + tmux + proot login) ---
+  mkdir -p "$HOME/.local/bin"
+  if [[ -f ./termux/dev ]]; then
+    cp ./termux/dev "$HOME/.local/bin/dev"
+    chmod +x "$HOME/.local/bin/dev"
+    echo "[INFO] Installed dev helper -> ~/.local/bin/dev"
+  fi
+  if ! grep -q '\.local/bin' "$HOME/.bashrc" 2>/dev/null; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+  fi
+
+  # --- proot-distro Ubuntu guest (requires proot-distro >= 5.x) ---
+  if proot-distro list --quiet 2>/dev/null | grep -qx "$UBUNTU_CONTAINER"; then
+    echo "[INFO] Container $UBUNTU_CONTAINER already installed, skip"
+  else
+    proot-distro install "$UBUNTU_IMAGE" --name "$UBUNTU_CONTAINER"
+  fi
+
+  # --- chain: sync this checkout into the guest and run bootstrap there ---
+  # The working tree is streamed over stdin so the guest always runs the
+  # exact same revision as the host (a fresh git clone could lag/diverge,
+  # and would never pick up local changes on re-runs).
+  echo "[INFO] Syncing dotfiles into $UBUNTU_CONTAINER ..."
+  tar --exclude=.git -cf - . | proot-distro login "$UBUNTU_CONTAINER" -- \
+    /bin/bash -c 'rm -rf "$HOME/dotfiles" && mkdir -p "$HOME/dotfiles" && tar -xf - -C "$HOME/dotfiles"'
+
+  echo "[INFO] Bootstrapping the dev environment inside $UBUNTU_CONTAINER ..."
+  proot-distro login "$UBUNTU_CONTAINER" --shared-tmp -- /bin/bash -c "
+    set -e
+    export DEBIAN_FRONTEND=noninteractive
+    export DOTFILES_ENV=proot
+    export DOTFILES_PYTHON_MODE='${DOTFILES_PYTHON_MODE:-uv}'
+    apt-get update
+    apt-get install -y ca-certificates curl git
+    cd \"\$HOME/dotfiles\"
+    ./bootstrap.sh
+  "
+
+  echo
+  echo "===================================="
+  echo "[DONE] Termux host layer ready."
+  echo " - sshd on port 8022 (for autostart: install the Termux:Boot app"
+  echo "   AND open it once so Android registers its boot receiver)"
+  echo " - Run 'passwd' once, then from your computer:"
+  echo "     ssh-copy-id -p 8022 <thor-ip>"
+  echo " - Run 'dev' to open the Ubuntu dev environment (tmux + wake-lock)"
+  echo "===================================="
+}
+
+if [[ "$DOTFILES_ENV" == "termux" ]]; then
+  # Hold a wake-lock for the whole host-layer run (multi-GB downloads
+  # would otherwise stall when the screen turns off); released on exit
+  # either way by the trap.
+  termux-wake-lock 2>/dev/null || true
+  trap 'termux-wake-unlock 2>/dev/null || true' EXIT
+  run_termux_bootstrap
+  exit 0
+fi
+
+# ============================
 #  Basic: sudo / root handling
 # ============================
 
@@ -152,7 +288,12 @@ check_package() {
 get_package_list() {
   case "$PKG_MANAGER" in
     apt)
-      echo "neovim curl wget git zsh build-essential libssl-dev clangd locales zoxide fzf fd-find ripgrep gh tmux bear unzip"
+      # jq is needed later to merge the pdf_snip MCP snippet
+      local apt_pkgs="neovim curl wget git zsh build-essential libssl-dev clangd locales zoxide fzf fd-find ripgrep gh tmux bear unzip jq"
+      # In a proot guest Neovim comes from the release tarball instead
+      # (the PPA route is slow under proot and the archive version lags)
+      [[ "$DOTFILES_ENV" == "proot" ]] && apt_pkgs="${apt_pkgs/neovim /}"
+      echo "$apt_pkgs"
       ;;
     brew)
       echo "neovim curl wget git zsh openssl llvm zoxide fzf fd ripgrep gh tmux bear unzip"
@@ -319,6 +460,13 @@ install_neovim_nosudo() {
 
 # Install clangd from GitHub release
 install_clangd_nosudo() {
+  # Upstream clangd release zips are x86_64-only — skip on other arches
+  # (use the distro package instead, e.g. apt/pkg clangd)
+  if [[ "$ARCH" != "x86_64" ]]; then
+    echo "[WARN] clangd prebuilt zips are x86_64-only; skip on $ARCH (install clangd via your package manager)"
+    return 1
+  fi
+
   local url="https://github.com/clangd/clangd/releases/download/${CLANGD_VERSION}/clangd-linux-${CLANGD_VERSION}.zip"
   local install_dir="$HOME/.local/share/clangd-install"
   local tmp_dir
@@ -614,8 +762,10 @@ install_packages() {
 
   case "$PKG_MANAGER" in
     apt)
-      # Special handling for Ubuntu PPA (for latest neovim)
-      if grep -q "Ubuntu" /etc/os-release 2>/dev/null; then
+      # Special handling for Ubuntu PPA (for latest neovim).
+      # Skipped in proot guests: Neovim is installed from the release
+      # tarball there and add-apt-repository is slow under proot.
+      if [[ "$DOTFILES_ENV" != "proot" ]] && grep -q "Ubuntu" /etc/os-release 2>/dev/null; then
         # Install software-properties-common if not present
         if ! dpkg -l software-properties-common 2>/dev/null | grep -q "^ii"; then
           $SUDO apt-get update
@@ -724,6 +874,17 @@ else
   echo "[INFO] sudo not available, using no-sudo installation path"
   install_packages_nosudo
   echo "[INFO] No-sudo package installation completed"
+fi
+
+# In a proot guest Neovim was excluded from the apt list — install the
+# pinned release tarball instead (same helper the no-sudo path uses).
+# ~/.local/bin may not be on the guest's default PATH yet, so also check
+# the install target directly to keep re-runs from re-downloading.
+if [[ "$DOTFILES_ENV" == "proot" ]] && ! command -v nvim &>/dev/null \
+   && [[ ! -x "$HOME/.local/bin/nvim" ]]; then
+  ARCH=$(detect_arch)
+  install_neovim_nosudo || echo "[WARN] Neovim installation failed"
+  export PATH="$HOME/.local/bin:$PATH"
 fi
 
 # ============================
@@ -916,7 +1077,7 @@ if command -v tree-sitter &>/dev/null; then
   echo "[INFO] tree-sitter-cli already installed: $(tree-sitter --version 2>/dev/null || echo 'version unknown')"
 else
   echo "[INFO] Installing tree-sitter-cli..."
-  npm install -g tree-sitter-cli
+  npm install -g tree-sitter-cli || echo "[WARN] tree-sitter-cli install failed (non-fatal)"
 fi
 
 # 安裝 emojify (bash script for git log emoji rendering)
@@ -936,7 +1097,8 @@ if command -v rtk &>/dev/null; then
   echo "[INFO] rtk already installed: $(rtk --version 2>/dev/null || echo 'version unknown')"
 else
   echo "[INFO] Installing RTK (Rust Token Killer)..."
-  curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh
+  curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh \
+    || echo "[WARN] RTK install failed (non-fatal)"
   # Ensure rtk is on PATH for the init step below
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
@@ -967,6 +1129,23 @@ if [[ "$PYTHON_MODE" == "uv" ]]; then
   export PATH="$HOME/.local/bin:$PATH"
 else
   echo "[INFO] syspython mode: skipping uv installation"
+fi
+
+# ============================
+#  Claude Code CLI (proot guest only)
+# ============================
+# Inside the proot Ubuntu guest the official native installer works as on
+# any Ubuntu host (glibc arm64). Other environments manage their own
+# Claude Code install, so this step is scoped to the guest.
+if [[ "$DOTFILES_ENV" == "proot" ]]; then
+  if command -v claude &>/dev/null; then
+    echo "[INFO] Claude Code already installed: $(claude --version 2>/dev/null || echo 'version unknown')"
+  else
+    echo "[INFO] Installing Claude Code (official installer)..."
+    curl -fsSL https://claude.ai/install.sh | bash \
+      || echo "[WARN] Claude Code install failed (non-fatal) — retry: curl -fsSL https://claude.ai/install.sh | bash"
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
 fi
 
 # ============================
@@ -1048,6 +1227,19 @@ if [[ "$PKG_MANAGER" == "apt" ]]; then
     $SUDO update-locale LANG=en_US.UTF-8
   else
     echo "[INFO] Skipping locale-gen (no sudo). ~/.zprofile already sets LANG/LC_ALL."
+  fi
+fi
+
+# ============================
+#  Login shell (proot guest only)
+# ============================
+# Make future `proot-distro login` sessions land in zsh directly.
+if [[ "$DOTFILES_ENV" == "proot" ]] && command -v zsh &>/dev/null; then
+  CURRENT_SHELL=$(getent passwd "$(whoami)" 2>/dev/null | cut -d: -f7)
+  if [[ "$CURRENT_SHELL" != "$(command -v zsh)" ]]; then
+    chsh -s "$(command -v zsh)" 2>/dev/null \
+      && echo "[INFO] Login shell set to zsh" \
+      || echo "[WARN] chsh failed — run manually: chsh -s \$(which zsh)"
   fi
 fi
 
