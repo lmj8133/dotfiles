@@ -94,7 +94,9 @@ fully removed by uninstalling Termux.
 
    Without this permission, sshd still starts at boot but is reclaimed a
    few minutes later — then simply open Termux once and `.bashrc` brings
-   it back.
+   it back. On multi-display devices, put a display id in
+   `~/.termux/boot-display` (e.g. `echo 4 > ~/.termux/boot-display` for
+   the AYN Thor's bottom screen) to open Termux there at boot.
 3. Disable the Android 12+ phantom process killer, which otherwise SIGKILLs
    long-running tmux/proot sessions (run from a computer with adb access):
 

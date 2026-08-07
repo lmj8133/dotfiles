@@ -67,10 +67,19 @@ run_termux_bootstrap() {
   # Android's empty-process reaper. Launching an activity from the
   # background needs the "Display over other apps" permission:
   #   adb shell appops set com.termux SYSTEM_ALERT_WINDOW allow
+  # A display id in ~/.termux/boot-display (device-local, never written
+  # by bootstrap) opens the app on that display — e.g. 4 = the AYN
+  # Thor's bottom screen. Requires /system/bin/am (termux-am has no
+  # --display); falls back to a default launch.
   mkdir -p "$HOME/.termux/boot"
   cat > "$HOME/.termux/boot/start-sshd.sh" <<'EOF'
 #!/data/data/com.termux/files/usr/bin/sh
 sshd
+if [ -f "$HOME/.termux/boot-display" ]; then
+  /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" \
+    -n com.termux/.HomeActivity >/dev/null 2>&1 \
+    && exit 0
+fi
 am start -n com.termux/.HomeActivity >/dev/null 2>&1 || true
 EOF
   chmod +x "$HOME/.termux/boot/start-sshd.sh"
