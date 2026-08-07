@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# tj — tmux join: attach or create a session; when another client is
+# already attached, join through a grouped session so each client keeps
+# an independent current-window over the shared windows.
+#
+# Usage: tj [session]    # default session name: main
+#
+# Notes:
+# - Windows are shared across the group; only the "which window am I
+#   looking at" pointer is per-client. Two clients on the SAME window
+#   still mirror each other by design.
+# - destroy-unattached must NOT be used for cleanup: tmux reaps a
+#   detached session the instant the option is set. Grouped sessions
+#   are cleaned up explicitly after the client detaches, plus a GC
+#   sweep for leftovers from abnormal exits.
+set -u
+
+SESSION="${1:-${TJ_SESSION:-main}}"
+
+tmux has-session -t "$SESSION" 2>/dev/null || tmux new-session -d -s "$SESSION"
+
+if [ -n "$(tmux list-clients -t "$SESSION" 2>/dev/null)" ]; then
+  # Collect stale grouped sessions left by abnormal exits
+  for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E "^${SESSION}[0-9]+$"); do
+    [ -z "$(tmux list-clients -t "$s" 2>/dev/null)" ] && tmux kill-session -t "$s" 2>/dev/null
+  done
+  i=2
+  while tmux has-session -t "$SESSION$i" 2>/dev/null; do i=$((i + 1)); done
+  tmux new-session -d -t "$SESSION" -s "$SESSION$i"
+  tmux attach -t "$SESSION$i"
+  # Client detached — clean up unless somebody else joined this one
+  [ -z "$(tmux list-clients -t "$SESSION$i" 2>/dev/null)" ] \
+    && tmux kill-session -t "$SESSION$i" 2>/dev/null
+  exit 0
+fi
+exec tmux attach -t "$SESSION"
