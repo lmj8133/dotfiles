@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 # Reference-counted wrapper around Termux's singleton wake-lock.
 #
 # Android exposes ONE wake-lock per Termux; independent holders (dev

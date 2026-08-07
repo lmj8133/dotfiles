@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 # Open (or attach to) the main dev session inside the proot Ubuntu guest.
 #
 # Battery model: a wake-lock is needed only when attached over SSH (the

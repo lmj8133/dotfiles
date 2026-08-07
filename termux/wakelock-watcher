@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 # Hold the Android wake-lock while Claude Code is ACTIVELY working, so
 # an agent turn survives the screen being turned off mid-task — while
 # an interactive session idling at its prompt releases the lock and

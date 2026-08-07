@@ -81,7 +81,8 @@ tmux has-session -t main 2>/dev/null || {
   tmux new-session -d -s main "proot-distro login ubuntu-24.04 --shared-tmp"
   tmux set-option -t main default-command "proot-distro login ubuntu-24.04 --shared-tmp"
 }
-pgrep -f wakelock-watcher >/dev/null || nohup "$HOME/.local/bin/wakelock-watcher" >/dev/null 2>&1 &
+pgrep -f wakelock-watcher >/dev/null \
+  || tmux new-session -d -s svc "$HOME/.local/bin/wakelock-watcher"
 if [ -f "$HOME/.termux/boot-display" ]; then
   /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" \
     --activity-exclude-from-recents \
