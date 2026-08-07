@@ -82,13 +82,20 @@ fully removed by uninstalling Termux.
 1. Install Termux **from F-Droid or GitHub** (never Google Play). Optionally
    also install the Termux:Boot app **and open it once** (Android only
    delivers boot events to apps that have been launched at least once) so
-   sshd starts right after a reboot. Note: without a foreground service,
-   Android reclaims background daemons a few minutes after boot — in
-   practice, **open Termux once after each reboot**: any session starts
-   sshd (via `.bashrc`) and its persistent notification keeps it alive.
-   For headless reboot persistence instead, add `termux-wake-lock` to
-   `~/.termux/boot/start-sshd.sh` — at the cost of idle battery drain.
-2. Disable the Android 12+ phantom process killer, which otherwise SIGKILLs
+   sshd starts right after a reboot.
+2. Grant Termux the "Display over other apps" permission so the boot
+   script can also open the Termux app itself — the session's foreground
+   notification is what keeps sshd alive past Android's empty-process
+   reaper (no wake-lock, no idle battery cost):
+
+   ```bash
+   adb shell appops set com.termux SYSTEM_ALERT_WINDOW allow
+   ```
+
+   Without this permission, sshd still starts at boot but is reclaimed a
+   few minutes later — then simply open Termux once and `.bashrc` brings
+   it back.
+3. Disable the Android 12+ phantom process killer, which otherwise SIGKILLs
    long-running tmux/proot sessions (run from a computer with adb access):
 
    ```bash
@@ -98,7 +105,7 @@ fully removed by uninstalling Termux.
 
    The flag survives reboots. Revert anytime with
    `adb shell settings delete global settings_enable_monitor_phantom_procs`.
-3. In Android settings, set Termux's battery usage to **Unrestricted**.
+4. In Android settings, set Termux's battery usage to **Unrestricted**.
 
 ### Install
 

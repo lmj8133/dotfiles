@@ -62,10 +62,16 @@ run_termux_bootstrap() {
 
   # Autostart sshd at boot via the Termux:Boot app if it is installed.
   # No wake-lock here — the dev helper holds one only during sessions.
+  # After sshd, open the Termux app itself: a session's foreground
+  # notification keeps the process group (sshd included) alive past
+  # Android's empty-process reaper. Launching an activity from the
+  # background needs the "Display over other apps" permission:
+  #   adb shell appops set com.termux SYSTEM_ALERT_WINDOW allow
   mkdir -p "$HOME/.termux/boot"
   cat > "$HOME/.termux/boot/start-sshd.sh" <<'EOF'
 #!/data/data/com.termux/files/usr/bin/sh
 sshd
+am start -n com.termux/.HomeActivity >/dev/null 2>&1 || true
 EOF
   chmod +x "$HOME/.termux/boot/start-sshd.sh"
 
