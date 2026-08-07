@@ -96,7 +96,9 @@ fully removed by uninstalling Termux.
    few minutes later — then simply open Termux once and `.bashrc` brings
    it back. On multi-display devices, put a display id in
    `~/.termux/boot-display` (e.g. `echo 4 > ~/.termux/boot-display` for
-   the AYN Thor's bottom screen) to open Termux there at boot.
+   the AYN Thor's bottom screen) and run `td` anytime to send the window
+   there (automatic placement at boot races the display's own init and
+   is deliberately not attempted).
 3. Disable the Android 12+ phantom process killer, which otherwise SIGKILLs
    long-running tmux/proot sessions (run from a computer with adb access):
 

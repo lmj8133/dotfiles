@@ -83,16 +83,6 @@ tmux has-session -t main 2>/dev/null || {
 }
 pgrep -f wakelock-watcher >/dev/null \
   || tmux new-session -d -s svc "$HOME/.local/bin/wakelock-watcher"
-# Secondary displays come up later than boot — keep nudging the window
-# to the preferred display for a few minutes (self-ending session)
-[ -f "$HOME/.termux/boot-display" ] && tmux new-session -d -s place \
-  'n=0; while [ $n -lt 12 ]; do sleep 20; n=$((n+1)); /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" --activity-exclude-from-recents -n com.termux/.HomeActivity >/dev/null 2>&1; done'
-if [ -f "$HOME/.termux/boot-display" ]; then
-  /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" \
-    --activity-exclude-from-recents \
-    -n com.termux/.HomeActivity >/dev/null 2>&1 \
-    && exit 0
-fi
 am start --activity-exclude-from-recents \
   -n com.termux/.HomeActivity >/dev/null 2>&1 || true
 EOF
@@ -135,25 +125,16 @@ EOF
   if ! grep -q 'wakelock-watcher' "$HOME/.bashrc" 2>/dev/null; then
     echo 'pgrep -f wakelock-watcher >/dev/null || nohup "$HOME/.local/bin/wakelock-watcher" >/dev/null 2>&1 &' >> "$HOME/.bashrc"
   fi
-  # First interactive session after boot: hand protection over from the
-  # boot lease to normal policy, and move the window to the preferred
-  # display (the boot script can fire before the display exists)
+  # td: manually send the window to the display named in
+  # ~/.termux/boot-display (automatic boot placement fought the OEM
+  # display manager's init timing and lost — manual is 100% reliable)
   if ! grep -q 'alias td=' "$HOME/.bashrc" 2>/dev/null; then
     echo "alias td='/system/bin/am start --display \"\$(cat \"\$HOME/.termux/boot-display\")\" --activity-exclude-from-recents -n com.termux/.HomeActivity'" >> "$HOME/.bashrc"
   fi
+  # First interactive session after boot hands protection over from the
+  # boot lease to normal wake-lock policy
   if ! grep -q 'wl release boot' "$HOME/.bashrc" 2>/dev/null; then
-    cat >> "$HOME/.bashrc" <<'EOF'
-"$HOME/.local/bin/wl" release boot >/dev/null 2>&1
-if [[ -f "$HOME/.termux/boot-display" ]]; then
-  _bootid=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
-  if [[ "$_bootid" != "$(cat "$HOME/.cache/display-moved" 2>/dev/null)" ]]; then
-    /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" \
-      --activity-exclude-from-recents \
-      -n com.termux/.HomeActivity >/dev/null 2>&1 \
-      && { mkdir -p "$HOME/.cache"; echo "$_bootid" > "$HOME/.cache/display-moved"; }
-  fi
-fi
-EOF
+    echo '"$HOME/.local/bin/wl" release boot >/dev/null 2>&1' >> "$HOME/.bashrc"
   fi
   # On-device interactive sessions land straight in the dev tmux session
   # (skipped over SSH, inside tmux, or when a client is already attached
