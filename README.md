@@ -127,9 +127,11 @@ downloads a few GB — keep the device on power).
   window opens inside Ubuntu); a second session from the drawer stays a
   plain host shell while the first is attached. Over SSH, run `dev` to
   attach the same session.
-- A wake-lock is held only for SSH attaches — on-device the lit screen
-  already keeps the CPU awake. For long unattended jobs (screen off,
-  detached), run `termux-wake-lock` manually.
+- Wake-lock policy: held automatically while any `claude` process is
+  alive (a background watcher — close the screen mid-task and the agent
+  keeps running; exit claude and the lock is released), and during SSH
+  attaches. On-device the lit screen covers the rest. For other long
+  unattended jobs, run `termux-wake-lock` manually.
 - From a computer: `passwd` once in Termux, then
   `ssh-copy-id -p 8022 <device-ip>` and `ssh -p 8022 <device-ip>`.
 - Claude Code login: if the browser OAuth callback fails, use the copy-URL /

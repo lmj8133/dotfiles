@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Hold the Android wake-lock exactly while a Claude Code process is
+# alive, so an agent run survives the screen being turned off (e.g. you
+# close the device and leave mid-task). Presence-based: an interactive
+# claude left sitting at its prompt also counts as alive — exit it to
+# let the lock go.
+#
+# proot guest processes are ordinary host processes, so host pgrep sees
+# claude running inside the Ubuntu container.
+set -u
+
+INTERVAL="${WAKELOCK_WATCH_INTERVAL:-30}"
+LOCKED=0
+
+while true; do
+  if pgrep -f '(^|/| )claude( |$)' >/dev/null 2>&1; then
+    if [ "$LOCKED" = 0 ]; then
+      termux-wake-lock 2>/dev/null || true
+      LOCKED=1
+    fi
+  else
+    if [ "$LOCKED" = 1 ]; then
+      termux-wake-unlock 2>/dev/null || true
+      LOCKED=0
+    fi
+  fi
+  sleep "$INTERVAL"
+done
