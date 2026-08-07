@@ -44,14 +44,21 @@ fi
 if [ -n "$(tmux list-clients -t "$SESSION" 2>/dev/null)" ]; then
   # Someone is already attached: join through a grouped session so each
   # client keeps an independent current-window over the shared windows.
+  # (destroy-unattached cannot be used here — tmux reaps a detached
+  # session the moment the option is set, before we can attach.)
+  for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E "^${SESSION}[0-9]+$"); do
+    [ -z "$(tmux list-clients -t "$s" 2>/dev/null)" ] && tmux kill-session -t "$s" 2>/dev/null
+  done
   i=2
   while tmux has-session -t "$SESSION$i" 2>/dev/null; do i=$((i + 1)); done
   tmux new-session -d -t "$SESSION" -s "$SESSION$i"
-  # Session options are not shared across a group — mirror the ones that
-  # matter and clean the grouped session up once its client detaches.
+  # Session options are not shared across a group — mirror the one that
+  # matters before the client can open windows.
   tmux set-option -t "$SESSION$i" default-command "$LOGIN_CMD"
-  tmux set-option -t "$SESSION$i" destroy-unattached on
   tmux attach -t "$SESSION$i"
+  # Client detached (or attach failed) — clean up if nobody else joined.
+  [ -z "$(tmux list-clients -t "$SESSION$i" 2>/dev/null)" ] \
+    && tmux kill-session -t "$SESSION$i" 2>/dev/null
   exit 0
 fi
 tmux attach -t "$SESSION"
