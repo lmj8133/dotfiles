@@ -82,7 +82,12 @@ fully removed by uninstalling Termux.
 1. Install Termux **from F-Droid or GitHub** (never Google Play). Optionally
    also install the Termux:Boot app **and open it once** (Android only
    delivers boot events to apps that have been launched at least once) so
-   sshd autostarts after a reboot.
+   sshd starts right after a reboot. Note: without a foreground service,
+   Android reclaims background daemons a few minutes after boot — in
+   practice, **open Termux once after each reboot**: any session starts
+   sshd (via `.bashrc`) and its persistent notification keeps it alive.
+   For headless reboot persistence instead, add `termux-wake-lock` to
+   `~/.termux/boot/start-sshd.sh` — at the cost of idle battery drain.
 2. Disable the Android 12+ phantom process killer, which otherwise SIGKILLs
    long-running tmux/proot sessions (run from a computer with adb access):
 
