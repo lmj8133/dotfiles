@@ -230,6 +230,7 @@ The included `init.lua` provides a professional IDE-like setup:
 - **GitHub Copilot**: AI pair programming (`<C-J>` to accept)
 - **Git Integration**: gitsigns, fugitive, flog
 - **Treesitter**: Syntax highlighting and code intelligence
+- **Markdown Rendering**: In-terminal rendering via render-markdown.nvim (`<leader>mr` to toggle)
 
 ### Keybindings Reference
 
@@ -527,6 +528,7 @@ The included `init.lua` provides a professional IDE-like setup:
 |-----|--------|
 | `<leader>mp` | Toggle preview |
 | `<leader>ms` | Stop preview |
+| `<leader>mr` | Toggle in-terminal render |
 | `<leader>mt` | Insert table |
 | `<leader>ml` | Insert link |
 | `<leader>mi` | Insert image |
