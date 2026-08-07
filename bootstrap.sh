@@ -60,25 +60,28 @@ run_termux_bootstrap() {
     echo "[INFO] sshd started on port 8022"
   fi
 
-  # Autostart sshd at boot via the Termux:Boot app if it is installed.
-  # No wake-lock here — the dev helper holds one only during sessions.
-  # After sshd, open the Termux app itself: a session's foreground
-  # notification keeps the process group (sshd included) alive past
-  # Android's empty-process reaper. Launching an activity from the
-  # background needs the "Display over other apps" permission:
+  # Boot script (runs via the Termux:Boot app, if installed): builds the
+  # whole dev layer HEADLESSLY — sshd, the tmux dev session, the claude
+  # watcher — so nothing depends on UI/keyguard/display timing at boot.
+  # A sticky "boot" wl lease keeps it alive until the first interactive
+  # session (UI or SSH) hands over to normal wake-lock policy via
+  # .bashrc. The app UI is opened only as a best-effort viewport
+  # (needs "Display over other apps":
   #   adb shell appops set com.termux SYSTEM_ALERT_WINDOW allow
-  # A display id in ~/.termux/boot-display (device-local, never written
-  # by bootstrap) opens the app on that display — e.g. 4 = the AYN
-  # Thor's bottom screen. Requires /system/bin/am (termux-am has no
-  # --display); falls back to a default launch.
+  # --activity-exclude-from-recents because some OEM launchers wire
+  # recents-swipe / clear-all to forceStopPackage; a display id in
+  # ~/.termux/boot-display, device-local, targets a secondary screen).
   mkdir -p "$HOME/.termux/boot"
-  # --activity-exclude-from-recents keeps Termux out of the recents
-  # list: some OEM launchers (e.g. AYN's) wire recents-swipe and
-  # "clear all" to forceStopPackage, which would kill sshd and every
-  # session in one tap.
   cat > "$HOME/.termux/boot/start-sshd.sh" <<'EOF'
 #!/data/data/com.termux/files/usr/bin/sh
+export PATH="$HOME/.local/bin:$PATH"
 sshd
+wl acquire boot sticky
+tmux has-session -t main 2>/dev/null || {
+  tmux new-session -d -s main "proot-distro login ubuntu-24.04 --shared-tmp"
+  tmux set-option -t main default-command "proot-distro login ubuntu-24.04 --shared-tmp"
+}
+pgrep -f wakelock-watcher >/dev/null || nohup "$HOME/.local/bin/wakelock-watcher" >/dev/null 2>&1 &
 if [ -f "$HOME/.termux/boot-display" ]; then
   /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" \
     --activity-exclude-from-recents \
@@ -126,6 +129,23 @@ EOF
   fi
   if ! grep -q 'wakelock-watcher' "$HOME/.bashrc" 2>/dev/null; then
     echo 'pgrep -f wakelock-watcher >/dev/null || nohup "$HOME/.local/bin/wakelock-watcher" >/dev/null 2>&1 &' >> "$HOME/.bashrc"
+  fi
+  # First interactive session after boot: hand protection over from the
+  # boot lease to normal policy, and move the window to the preferred
+  # display (the boot script can fire before the display exists)
+  if ! grep -q 'wl release boot' "$HOME/.bashrc" 2>/dev/null; then
+    cat >> "$HOME/.bashrc" <<'EOF'
+"$HOME/.local/bin/wl" release boot >/dev/null 2>&1
+if [[ -f "$HOME/.termux/boot-display" ]]; then
+  _bootid=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+  if [[ "$_bootid" != "$(cat "$HOME/.cache/display-moved" 2>/dev/null)" ]]; then
+    /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" \
+      --activity-exclude-from-recents \
+      -n com.termux/.HomeActivity >/dev/null 2>&1 \
+      && { mkdir -p "$HOME/.cache"; echo "$_bootid" > "$HOME/.cache/display-moved"; }
+  fi
+fi
+EOF
   fi
   # On-device interactive sessions land straight in the dev tmux session
   # (skipped over SSH, inside tmux, or when a client is already attached
