@@ -123,6 +123,12 @@ downloads a few GB — keep the device on power).
 
 ### Daily use
 
+> **Warning**: leave Termux with the **Home** button. On some OEM
+> launchers (AYN included) swiping Termux out of the recents list — or
+> "clear all" — force-stops the whole app, killing sshd and every
+> session. The boot script therefore opens Termux excluded from the
+> recents list; a manually opened Termux is still swipeable.
+
 - On-device Termux sessions land straight in the dev tmux session (every
   window opens inside Ubuntu); a second session from the drawer stays a
   plain host shell while the first is attached. Over SSH, run `dev` to

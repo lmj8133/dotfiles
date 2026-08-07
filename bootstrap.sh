@@ -72,15 +72,21 @@ run_termux_bootstrap() {
   # Thor's bottom screen. Requires /system/bin/am (termux-am has no
   # --display); falls back to a default launch.
   mkdir -p "$HOME/.termux/boot"
+  # --activity-exclude-from-recents keeps Termux out of the recents
+  # list: some OEM launchers (e.g. AYN's) wire recents-swipe and
+  # "clear all" to forceStopPackage, which would kill sshd and every
+  # session in one tap.
   cat > "$HOME/.termux/boot/start-sshd.sh" <<'EOF'
 #!/data/data/com.termux/files/usr/bin/sh
 sshd
 if [ -f "$HOME/.termux/boot-display" ]; then
   /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" \
+    --activity-exclude-from-recents \
     -n com.termux/.HomeActivity >/dev/null 2>&1 \
     && exit 0
 fi
-am start -n com.termux/.HomeActivity >/dev/null 2>&1 || true
+am start --activity-exclude-from-recents \
+  -n com.termux/.HomeActivity >/dev/null 2>&1 || true
 EOF
   chmod +x "$HOME/.termux/boot/start-sshd.sh"
 
