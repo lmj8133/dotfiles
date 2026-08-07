@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Open (or attach to) the main dev session inside the proot Ubuntu guest.
 #
-# Battery model: an Android wake-lock is held while a client is attached
-# and released when the LAST client detaches, so an idle device still
-# deep-sleeps. If you detach with work still running, run
-# `termux-wake-lock` manually to keep it alive.
+# Battery model: a wake-lock is needed only when attached over SSH (the
+# screen is off and the device must not doze mid-session). On-device
+# attaches skip it — the lit screen already keeps the CPU awake. For
+# long unattended jobs (screen off, detached) run `termux-wake-lock`
+# manually.
 #
 # Usage: dev                 # attach or create the "main" session
 #        DEV_SESSION=x dev   # use a different tmux session name
@@ -16,16 +17,21 @@ SESSION="${DEV_SESSION:-main}"
 # $PREFIX/tmp as /tmp inside the guest.
 LOGIN_CMD="proot-distro login $CONTAINER --shared-tmp"
 
+LOCK_ACQUIRED=0
+if [ -n "${SSH_CONNECTION:-}" ]; then
+  termux-wake-lock 2>/dev/null || true
+  LOCK_ACQUIRED=1
+fi
+
 release_lock_if_last() {
-  # The Termux wake-lock is a device-wide singleton — only release it
-  # when no client remains attached to the session.
+  # The Termux wake-lock is a device-wide singleton — release only what
+  # we acquired, and only when no client remains attached.
+  [ "$LOCK_ACQUIRED" = 1 ] || return 0
   if [ -z "$(tmux list-clients -t "$SESSION" 2>/dev/null)" ]; then
     termux-wake-unlock 2>/dev/null || true
     echo "[dev] wake-lock released (run termux-wake-lock to keep background work alive)"
   fi
 }
-
-termux-wake-lock 2>/dev/null || true
 trap release_lock_if_last EXIT
 
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then

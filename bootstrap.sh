@@ -108,6 +108,18 @@ EOF
   if ! grep -q 'pgrep -x sshd' "$HOME/.bashrc" 2>/dev/null; then
     echo 'pgrep -x sshd >/dev/null || sshd' >> "$HOME/.bashrc"
   fi
+  # On-device interactive sessions land straight in the dev tmux session
+  # (skipped over SSH, inside tmux, or when a client is already attached
+  # — so a second local session stays a plain host shell)
+  if ! grep -q 'auto-dev' "$HOME/.bashrc" 2>/dev/null; then
+    cat >> "$HOME/.bashrc" <<'EOF'
+# auto-dev: boot/opened sessions go straight into the dev environment
+if [[ $- == *i* && -z "${TMUX:-}" && -z "${SSH_CONNECTION:-}" ]] \
+   && ! tmux list-clients -t main 2>/dev/null | grep -q .; then
+  dev
+fi
+EOF
+  fi
 
   # --- proot-distro Ubuntu guest (requires proot-distro >= 5.x) ---
   if proot-distro list --quiet 2>/dev/null | grep -qx "$UBUNTU_CONTAINER"; then

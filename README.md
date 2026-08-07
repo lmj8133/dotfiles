@@ -123,9 +123,13 @@ downloads a few GB — keep the device on power).
 
 ### Daily use
 
-- `dev` — attach the main tmux session; every window opens inside Ubuntu.
-  A wake-lock is held only while attached (idle device still deep-sleeps).
-  If you detach with work still running, run `termux-wake-lock` manually.
+- On-device Termux sessions land straight in the dev tmux session (every
+  window opens inside Ubuntu); a second session from the drawer stays a
+  plain host shell while the first is attached. Over SSH, run `dev` to
+  attach the same session.
+- A wake-lock is held only for SSH attaches — on-device the lit screen
+  already keeps the CPU awake. For long unattended jobs (screen off,
+  detached), run `termux-wake-lock` manually.
 - From a computer: `passwd` once in Termux, then
   `ssh-copy-id -p 8022 <device-ip>` and `ssh -p 8022 <device-ip>`.
 - Claude Code login: if the browser OAuth callback fails, use the copy-URL /
