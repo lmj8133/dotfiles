@@ -125,12 +125,6 @@ EOF
   if ! grep -q 'wakelock-watcher' "$HOME/.bashrc" 2>/dev/null; then
     echo 'pgrep -f wakelock-watcher >/dev/null || nohup "$HOME/.local/bin/wakelock-watcher" >/dev/null 2>&1 &' >> "$HOME/.bashrc"
   fi
-  # td: manually send the window to the display named in
-  # ~/.termux/boot-display (automatic boot placement fought the OEM
-  # display manager's init timing and lost — manual is 100% reliable)
-  if ! grep -q 'alias td=' "$HOME/.bashrc" 2>/dev/null; then
-    echo "alias td='/system/bin/am start --display \"\$(cat \"\$HOME/.termux/boot-display\")\" --activity-exclude-from-recents -n com.termux/.HomeActivity'" >> "$HOME/.bashrc"
-  fi
   # First interactive session after boot hands protection over from the
   # boot lease to normal wake-lock policy
   if ! grep -q 'wl release boot' "$HOME/.bashrc" 2>/dev/null; then
