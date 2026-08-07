@@ -912,11 +912,15 @@ else
 fi
 
 # 安裝 tree-sitter-cli
-if command -v tree-sitter &>/dev/null; then
-  echo "[INFO] tree-sitter-cli already installed: $(tree-sitter --version 2>/dev/null || echo 'version unknown')"
+# Pinned to 0.24.x: nvim-treesitter (master branch) runs `tree-sitter generate
+# --no-bindings`, a flag removed in CLI 0.25+, so newer CLIs break parser installs
+# (e.g. the latex parser needed for math rendering in markdown).
+TREE_SITTER_CLI_VERSION="0.24.7"
+if tree-sitter --version 2>/dev/null | grep -qF "tree-sitter $TREE_SITTER_CLI_VERSION"; then
+  echo "[INFO] tree-sitter-cli $TREE_SITTER_CLI_VERSION already installed"
 else
-  echo "[INFO] Installing tree-sitter-cli..."
-  npm install -g tree-sitter-cli
+  echo "[INFO] Installing tree-sitter-cli $TREE_SITTER_CLI_VERSION (pinned for nvim-treesitter master)..."
+  npm install -g "tree-sitter-cli@$TREE_SITTER_CLI_VERSION"
 fi
 
 # 安裝 emojify (bash script for git log emoji rendering)
@@ -967,6 +971,29 @@ if [[ "$PYTHON_MODE" == "uv" ]]; then
   export PATH="$HOME/.local/bin:$PATH"
 else
   echo "[INFO] syspython mode: skipping uv installation"
+fi
+
+# ============================
+#  Markdown math rendering (latex2text for render-markdown.nvim)
+# ============================
+# render-markdown.nvim renders LaTeX math in markdown buffers only when a
+# converter executable is on PATH; without one it silently skips math.
+if command -v latex2text &>/dev/null; then
+  echo "[INFO] latex2text already installed, skip"
+elif [[ "$PYTHON_MODE" == "uv" ]]; then
+  if command -v uv &>/dev/null; then
+    uv tool install pylatexenc \
+      || echo "[WARN] uv tool install pylatexenc failed (non-fatal)"
+  else
+    echo "[WARN] uv not on PATH — skipping pylatexenc install"
+  fi
+else
+  if command -v pip3 &>/dev/null; then
+    pip3 install -q pylatexenc \
+      || echo "[WARN] pip3 install pylatexenc failed (non-fatal)"
+  else
+    echo "[WARN] pip3 not found — skipping pylatexenc install"
+  fi
 fi
 
 # ============================
@@ -1060,6 +1087,7 @@ echo " - nvm + Node 22 + tree-sitter-cli"
 echo " - emojify (git log emoji renderer)"
 echo " - RTK (Claude Code token optimizer)"
 echo " - uv (Python toolchain)"
+echo " - pylatexenc (markdown math rendering in nvim)"
 echo " - pdf-snip MCP server (mcp/pdf_snip)"
 echo " - fd-find, ripgrep, fzf, zoxide"
 echo " - Locale: en_US.UTF-8"

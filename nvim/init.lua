@@ -170,6 +170,7 @@ require("lazy").setup({
   -- Telescope（統一 <C-d>/<C-u> 為預覽窗捲動）
   {
     'nvim-telescope/telescope.nvim',
+    tag = '0.1.8',  -- last release supporting nvim 0.10 (master requires nvim 0.11+)
     dependencies = {
       'nvim-lua/plenary.nvim',
       'nvim-telescope/telescope-fzf-native.nvim',
@@ -211,9 +212,10 @@ require("lazy").setup({
   -- LSP 配置（含 texlab → Skim forward search）
   {
     "neovim/nvim-lspconfig",
+    version = "2.*",  -- v3.0.0 drops nvim 0.10 support
     dependencies = {
-      "williamboman/mason.nvim",
-      "williamboman/mason-lspconfig.nvim",
+      { "williamboman/mason.nvim", version = "1.*" },            -- v2 requires nvim 0.11+
+      { "williamboman/mason-lspconfig.nvim", version = "1.*" },  -- v2 requires nvim 0.11+
       "hrsh7th/cmp-nvim-lsp",
       "folke/neodev.nvim"
     },
@@ -412,6 +414,7 @@ require("lazy").setup({
   -- Treesitter
   {
     "nvim-treesitter/nvim-treesitter",
+    branch = "master",  -- legacy branch: the 'main' rewrite drops nvim-treesitter.configs and requires nvim 0.11+
     build = ":TSUpdate",
     config = function()
       require('nvim-treesitter.configs').setup({
@@ -597,6 +600,45 @@ require("lazy").setup({
         content_editable = false, disable_filename = 0
       }
     end,
+  },
+
+  -- Markdown 終端機內渲染
+  {
+    "MeanderingProgrammer/render-markdown.nvim",
+    dependencies = {
+      "nvim-treesitter/nvim-treesitter",
+      "nvim-tree/nvim-web-devicons",
+    },
+    ft = { "markdown" },
+    opts = {
+      heading = {
+        sign = false,
+        icons = { "󰲡 ", "󰲣 ", "󰲥 ", "󰲧 ", "󰲩 ", "󰲫 " },
+        width = "block",
+        right_pad = 2,
+      },
+      code = {
+        sign = false,
+        style = "full",
+        width = "block",
+        right_pad = 2,
+        border = "thin",
+      },
+      bullet = { icons = { "●", "○", "◆", "◇" } },
+      checkbox = {
+        unchecked = { icon = "󰄱 " },
+        checked   = { icon = "󰱒 " },
+      },
+      pipe_table = { style = "full", cell = "padded" },
+      win_options = {
+        -- conceal 只作用於 markdown buffer；關閉渲染時降為 0 以顯示完整語法
+        conceallevel  = { default = 0, rendered = 2 },
+        concealcursor = { default = "", rendered = "" },
+      },
+    },
+    keys = {
+      { "<leader>mr", "<cmd>RenderMarkdown toggle<CR>", ft = "markdown", desc = "Markdown: Toggle inline render" },
+    },
   },
 
   -- LaTeX（VimTeX，Skim 雙向同步）
