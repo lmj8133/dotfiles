@@ -88,6 +88,11 @@ EOF
   if ! grep -q '\.local/bin' "$HOME/.bashrc" 2>/dev/null; then
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
   fi
+  # Opening any Termux session also brings sshd up (Termux:Boot only
+  # covers device reboots, not the app being killed and reopened)
+  if ! grep -q 'pgrep -x sshd' "$HOME/.bashrc" 2>/dev/null; then
+    echo 'pgrep -x sshd >/dev/null || sshd' >> "$HOME/.bashrc"
+  fi
 
   # --- proot-distro Ubuntu guest (requires proot-distro >= 5.x) ---
   if proot-distro list --quiet 2>/dev/null | grep -qx "$UBUNTU_CONTAINER"; then
