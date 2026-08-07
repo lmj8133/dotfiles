@@ -25,9 +25,10 @@ fi
 
 release_lock_if_last() {
   # The Termux wake-lock is a device-wide singleton — release only what
-  # we acquired, and only when no client remains attached.
+  # we acquired, and only when no client remains attached anywhere
+  # (grouped sessions included).
   [ "$LOCK_ACQUIRED" = 1 ] || return 0
-  if [ -z "$(tmux list-clients -t "$SESSION" 2>/dev/null)" ]; then
+  if [ -z "$(tmux list-clients 2>/dev/null)" ]; then
     termux-wake-unlock 2>/dev/null || true
     echo "[dev] wake-lock released (run termux-wake-lock to keep background work alive)"
   fi
@@ -38,5 +39,19 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
   tmux new-session -d -s "$SESSION" "$LOGIN_CMD"
   # Every window/pane created later in this session also lands in the guest.
   tmux set-option -t "$SESSION" default-command "$LOGIN_CMD"
+fi
+
+if [ -n "$(tmux list-clients -t "$SESSION" 2>/dev/null)" ]; then
+  # Someone is already attached: join through a grouped session so each
+  # client keeps an independent current-window over the shared windows.
+  i=2
+  while tmux has-session -t "$SESSION$i" 2>/dev/null; do i=$((i + 1)); done
+  tmux new-session -d -t "$SESSION" -s "$SESSION$i"
+  # Session options are not shared across a group — mirror the ones that
+  # matter and clean the grouped session up once its client detaches.
+  tmux set-option -t "$SESSION$i" default-command "$LOGIN_CMD"
+  tmux set-option -t "$SESSION$i" destroy-unattached on
+  tmux attach -t "$SESSION$i"
+  exit 0
 fi
 tmux attach -t "$SESSION"
