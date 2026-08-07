@@ -2,6 +2,196 @@
 set -euo pipefail
 
 # ============================
+#  Environment detection: Termux host / proot guest / standard
+# ============================
+# DOTFILES_ENV=termux|proot|standard overrides detection (used when this
+# script chains itself into a proot guest, where heuristics can be thin).
+detect_environment() {
+  if [[ -n "${DOTFILES_ENV:-}" ]]; then
+    echo "$DOTFILES_ENV"
+    return
+  fi
+  # Termux: bionic userland on Android; the app exports TERMUX_VERSION.
+  if [[ -n "${TERMUX_VERSION:-}" || "$(uname -o 2>/dev/null)" == "Android" ]]; then
+    echo "termux"
+    return
+  fi
+  # proot guest (e.g. proot-distro Ubuntu inside Termux): glibc userland,
+  # but the Termux prefix stays visible and proot-distro >= 5.x fakes the
+  # kernel release string (e.g. "6.17.0-PRoot-Distro").
+  if [[ -d /data/data/com.termux/files/usr ]] \
+     || uname -r 2>/dev/null | grep -qiE -- '-android|proot'; then
+    echo "proot"
+    return
+  fi
+  echo "standard"
+}
+DOTFILES_ENV=$(detect_environment)
+echo "[INFO] Environment: $DOTFILES_ENV"
+
+# ============================
+#  Termux host layer (Android)
+# ============================
+# On Termux only a thin host layer is set up (sshd, tmux, dev helper,
+# proot-distro Ubuntu); the full dev environment is then installed by
+# re-running this script inside the proot guest.
+# proot-distro >= 5.x pulls OCI images; container names cannot contain
+# ':', so the image ref and the container name are kept separate.
+UBUNTU_IMAGE="ubuntu:24.04"
+UBUNTU_CONTAINER="ubuntu-24.04"
+
+run_termux_bootstrap() {
+  echo "[INFO] Termux detected — setting up Android host layer + proot Ubuntu"
+
+  # Host-layer files are referenced relative to the repo root
+  cd "$(dirname "${BASH_SOURCE[0]}")"
+
+  # pkg refreshes the apt index automatically before installing
+  pkg install -y proot-distro openssh tmux
+
+  # --- sshd (Termux compiles it for port 8022) ---
+  mkdir -p "$HOME/.ssh"
+  chmod 700 "$HOME/.ssh"
+  touch "$HOME/.ssh/authorized_keys"
+  chmod 600 "$HOME/.ssh/authorized_keys"
+  ssh-keygen -A 2>/dev/null || true  # host keys, no-op if they exist
+  if ! pgrep -x sshd >/dev/null 2>&1; then
+    sshd
+    echo "[INFO] sshd started on port 8022"
+  fi
+
+  # Boot script (runs via the Termux:Boot app, if installed): builds the
+  # whole dev layer HEADLESSLY — sshd, the tmux dev session, the claude
+  # watcher — so nothing depends on UI/keyguard/display timing at boot.
+  # A sticky "boot" wl lease keeps it alive until the first interactive
+  # session (UI or SSH) hands over to normal wake-lock policy via
+  # .bashrc. The app UI is opened only as a best-effort viewport
+  # (needs "Display over other apps":
+  #   adb shell appops set com.termux SYSTEM_ALERT_WINDOW allow
+  # --activity-exclude-from-recents because some OEM launchers wire
+  # recents-swipe / clear-all to forceStopPackage; a display id in
+  # ~/.termux/boot-display, device-local, targets a secondary screen).
+  mkdir -p "$HOME/.termux/boot"
+  cat > "$HOME/.termux/boot/start-sshd.sh" <<'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+export PATH="$HOME/.local/bin:$PATH"
+sshd
+wl acquire boot sticky
+tmux has-session -t main 2>/dev/null || {
+  tmux new-session -d -s main "proot-distro login ubuntu-24.04 --shared-tmp"
+  tmux set-option -t main default-command "proot-distro login ubuntu-24.04 --shared-tmp"
+}
+pgrep -f wakelock-watcher >/dev/null \
+  || tmux new-session -d -s svc "$HOME/.local/bin/wakelock-watcher"
+am start --activity-exclude-from-recents \
+  -n com.termux/.HomeActivity >/dev/null 2>&1 || true
+EOF
+  chmod +x "$HOME/.termux/boot/start-sshd.sh"
+
+  # --- terminal ergonomics ---
+  [[ -f ./tmux/tmux.conf ]] && cp ./tmux/tmux.conf "$HOME/.tmux.conf"
+  if [[ -f ./termux/termux.properties ]]; then
+    mkdir -p "$HOME/.termux"
+    cp ./termux/termux.properties "$HOME/.termux/termux.properties"
+    termux-reload-settings 2>/dev/null || true
+    echo "[INFO] Deployed termux.properties (extra keys row)"
+  fi
+
+  # --- dev helper (wake-lock + tmux + proot login) ---
+  mkdir -p "$HOME/.local/bin"
+  if [[ -f ./termux/dev ]]; then
+    cp ./termux/dev "$HOME/.local/bin/dev"
+    chmod +x "$HOME/.local/bin/dev"
+    echo "[INFO] Installed dev helper -> ~/.local/bin/dev"
+  fi
+  # Wake-lock tooling: wl (reference-counted lease wrapper around the
+  # singleton Termux wake-lock) and the watcher that leases it while
+  # claude is actively working
+  for tool in wl wakelock-watcher; do
+    if [[ -f "./termux/$tool" ]]; then
+      cp "./termux/$tool" "$HOME/.local/bin/$tool"
+      chmod +x "$HOME/.local/bin/$tool"
+      echo "[INFO] Installed $tool -> ~/.local/bin/$tool"
+    fi
+  done
+  if ! grep -q '\.local/bin' "$HOME/.bashrc" 2>/dev/null; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+  fi
+  # Opening any Termux session also brings sshd up (Termux:Boot only
+  # covers device reboots, not the app being killed and reopened)
+  if ! grep -q 'pgrep -x sshd' "$HOME/.bashrc" 2>/dev/null; then
+    echo 'pgrep -x sshd >/dev/null || sshd' >> "$HOME/.bashrc"
+  fi
+  if ! grep -q 'wakelock-watcher' "$HOME/.bashrc" 2>/dev/null; then
+    echo 'pgrep -f wakelock-watcher >/dev/null || nohup "$HOME/.local/bin/wakelock-watcher" >/dev/null 2>&1 &' >> "$HOME/.bashrc"
+  fi
+  # First interactive session after boot hands protection over from the
+  # boot lease to normal wake-lock policy
+  if ! grep -q 'wl release boot' "$HOME/.bashrc" 2>/dev/null; then
+    echo '"$HOME/.local/bin/wl" release boot >/dev/null 2>&1' >> "$HOME/.bashrc"
+  fi
+  # On-device interactive sessions land straight in the dev tmux session
+  # (skipped over SSH, inside tmux, or when a client is already attached
+  # — so a second local session stays a plain host shell)
+  if ! grep -q 'auto-dev' "$HOME/.bashrc" 2>/dev/null; then
+    cat >> "$HOME/.bashrc" <<'EOF'
+# auto-dev: boot/opened sessions go straight into the dev environment
+if [[ $- == *i* && -z "${TMUX:-}" && -z "${SSH_CONNECTION:-}" ]] \
+   && ! tmux list-clients -t main 2>/dev/null | grep -q .; then
+  dev
+fi
+EOF
+  fi
+
+  # --- proot-distro Ubuntu guest (requires proot-distro >= 5.x) ---
+  if proot-distro list --quiet 2>/dev/null | grep -qx "$UBUNTU_CONTAINER"; then
+    echo "[INFO] Container $UBUNTU_CONTAINER already installed, skip"
+  else
+    proot-distro install "$UBUNTU_IMAGE" --name "$UBUNTU_CONTAINER"
+  fi
+
+  # --- chain: sync this checkout into the guest and run bootstrap there ---
+  # The working tree is streamed over stdin so the guest always runs the
+  # exact same revision as the host (a fresh git clone could lag/diverge,
+  # and would never pick up local changes on re-runs).
+  echo "[INFO] Syncing dotfiles into $UBUNTU_CONTAINER ..."
+  tar --exclude=.git -cf - . | proot-distro login "$UBUNTU_CONTAINER" -- \
+    /bin/bash -c 'rm -rf "$HOME/dotfiles" && mkdir -p "$HOME/dotfiles" && tar -xf - -C "$HOME/dotfiles"'
+
+  echo "[INFO] Bootstrapping the dev environment inside $UBUNTU_CONTAINER ..."
+  proot-distro login "$UBUNTU_CONTAINER" --shared-tmp -- /bin/bash -c "
+    set -e
+    export DEBIAN_FRONTEND=noninteractive
+    export DOTFILES_ENV=proot
+    export DOTFILES_PYTHON_MODE='${DOTFILES_PYTHON_MODE:-uv}'
+    apt-get update
+    apt-get install -y ca-certificates curl git
+    cd \"\$HOME/dotfiles\"
+    ./bootstrap.sh
+  "
+
+  echo
+  echo "===================================="
+  echo "[DONE] Termux host layer ready."
+  echo " - sshd on port 8022 (for autostart: install the Termux:Boot app"
+  echo "   AND open it once so Android registers its boot receiver)"
+  echo " - Run 'passwd' once, then from your computer:"
+  echo "     ssh-copy-id -p 8022 <thor-ip>"
+  echo " - Run 'dev' to open the Ubuntu dev environment (tmux + wake-lock)"
+  echo "===================================="
+}
+
+if [[ "$DOTFILES_ENV" == "termux" ]]; then
+  # Hold a wake-lock for the whole host-layer run (multi-GB downloads
+  # would otherwise stall when the screen turns off); released on exit
+  # either way by the trap.
+  termux-wake-lock 2>/dev/null || true
+  trap 'termux-wake-unlock 2>/dev/null || true' EXIT
+  run_termux_bootstrap
+  exit 0
+fi
+
+# ============================
 #  Basic: sudo / root handling
 # ============================
 
@@ -97,6 +287,32 @@ PKG_MANAGER=$(detect_package_manager)
 echo "[INFO] Detected package manager: $PKG_MANAGER"
 
 # ============================
+#  Python toolchain mode
+# ============================
+detect_python_mode() {
+  # Non-interactive override: DOTFILES_PYTHON_MODE=uv|syspython
+  if [[ -n "${DOTFILES_PYTHON_MODE:-}" ]]; then
+    echo "$DOTFILES_PYTHON_MODE"
+    return
+  fi
+  local default="uv"
+  command -v uv &>/dev/null || default="syspython"
+  echo "" >&2
+  echo ">>> Python toolchain <<<" >&2
+  echo "  [1] uv  (recommended for dev machines)" >&2
+  echo "  [2] syspython  (system Python, no uv)" >&2
+  echo "" >&2
+  local choice
+  read -r -p "Select Python mode [default: $default]: " choice
+  case "$choice" in
+    2|syspython|sys) echo "syspython" ;;
+    *)               echo "uv" ;;
+  esac
+}
+PYTHON_MODE=$(detect_python_mode)
+echo "[INFO] Python mode: $PYTHON_MODE"
+
+# ============================
 #  Helper functions
 # ============================
 check_package() {
@@ -126,7 +342,12 @@ check_package() {
 get_package_list() {
   case "$PKG_MANAGER" in
     apt)
-      echo "neovim curl wget git zsh build-essential libssl-dev clangd locales zoxide fzf fd-find ripgrep gh tmux bear unzip"
+      # jq is needed later to merge the pdf_snip MCP snippet
+      local apt_pkgs="neovim curl wget git zsh build-essential libssl-dev clangd locales zoxide fzf fd-find ripgrep gh tmux bear unzip jq"
+      # In a proot guest Neovim comes from the release tarball instead
+      # (the PPA route is slow under proot and the archive version lags)
+      [[ "$DOTFILES_ENV" == "proot" ]] && apt_pkgs="${apt_pkgs/neovim /}"
+      echo "$apt_pkgs"
       ;;
     brew)
       echo "neovim curl wget git zsh openssl llvm zoxide fzf fd ripgrep gh tmux bear unzip"
@@ -169,6 +390,45 @@ clone_if_missing() {
   else
     git clone --depth=1 "$repo_url" "$dir_name"
   fi
+}
+
+# ============================
+#  Claude config deployment (python-mode aware)
+# ============================
+# Strip UV_ONLY / UV_FREE sentinel blocks from a deployed ~/.claude file.
+# uv mode:       remove sentinel lines only, keep UV_ONLY content, remove UV_FREE content.
+# syspython mode: remove UV_ONLY content entirely, keep UV_FREE content (sentinels removed).
+strip_uv_sentinels() {
+  local file="$1"
+  if [[ "$PYTHON_MODE" == "syspython" ]]; then
+    sed -i '/<!-- UV_ONLY_START -->/,/<!-- UV_ONLY_END -->/d' "$file"
+    sed -i '/<!-- UV_FREE_START -->/d; /<!-- UV_FREE_END -->/d' "$file"
+  else
+    sed -i '/<!-- UV_ONLY_START -->/d; /<!-- UV_ONLY_END -->/d' "$file"
+    sed -i '/<!-- UV_FREE_START -->/,/<!-- UV_FREE_END -->/d' "$file"
+  fi
+}
+
+CLAUDE_FILES_WITH_UV=(
+  "claude/CLAUDE.md"
+  "claude/rules/general-python.md"
+  "claude/rules/cv-ai.md"
+  "claude/skills/review/SKILL.md"
+  "claude/skills/review/references/checklists.md"
+)
+
+deploy_claude_files() {
+  mkdir -p "$HOME/.claude"
+  cp -r ./claude/* "$HOME/.claude/"
+  echo "[INFO] Copied ./claude/* -> ~/.claude/"
+  echo "[INFO] Stripping UV sentinels (mode: $PYTHON_MODE)..."
+  for rel_path in "${CLAUDE_FILES_WITH_UV[@]}"; do
+    local dest="$HOME/.claude/${rel_path#claude/}"
+    if [[ -f "$dest" ]]; then
+      strip_uv_sentinels "$dest"
+      echo "[INFO]   Processed: $dest"
+    fi
+  done
 }
 
 # ============================
@@ -254,6 +514,13 @@ install_neovim_nosudo() {
 
 # Install clangd from GitHub release
 install_clangd_nosudo() {
+  # Upstream clangd release zips are x86_64-only — skip on other arches
+  # (use the distro package instead, e.g. apt/pkg clangd)
+  if [[ "$ARCH" != "x86_64" ]]; then
+    echo "[WARN] clangd prebuilt zips are x86_64-only; skip on $ARCH (install clangd via your package manager)"
+    return 1
+  fi
+
   local url="https://github.com/clangd/clangd/releases/download/${CLANGD_VERSION}/clangd-linux-${CLANGD_VERSION}.zip"
   local install_dir="$HOME/.local/share/clangd-install"
   local tmp_dir
@@ -549,8 +816,10 @@ install_packages() {
 
   case "$PKG_MANAGER" in
     apt)
-      # Special handling for Ubuntu PPA (for latest neovim)
-      if grep -q "Ubuntu" /etc/os-release 2>/dev/null; then
+      # Special handling for Ubuntu PPA (for latest neovim).
+      # Skipped in proot guests: Neovim is installed from the release
+      # tarball there and add-apt-repository is slow under proot.
+      if [[ "$DOTFILES_ENV" != "proot" ]] && grep -q "Ubuntu" /etc/os-release 2>/dev/null; then
         # Install software-properties-common if not present
         if ! dpkg -l software-properties-common 2>/dev/null | grep -q "^ii"; then
           $SUDO apt-get update
@@ -661,6 +930,17 @@ else
   echo "[INFO] No-sudo package installation completed"
 fi
 
+# In a proot guest Neovim was excluded from the apt list — install the
+# pinned release tarball instead (same helper the no-sudo path uses).
+# ~/.local/bin may not be on the guest's default PATH yet, so also check
+# the install target directly to keep re-runs from re-downloading.
+if [[ "$DOTFILES_ENV" == "proot" ]] && ! command -v nvim &>/dev/null \
+   && [[ ! -x "$HOME/.local/bin/nvim" ]]; then
+  ARCH=$(detect_arch)
+  install_neovim_nosudo || echo "[WARN] Neovim installation failed"
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
 # ============================
 #  Zsh config
 # ============================
@@ -743,9 +1023,7 @@ fi
 # ============================
 #  Claude Code config
 # ============================
-mkdir -p "$HOME/.claude"
-cp -r ./claude/* "$HOME/.claude/"
-echo "[INFO] Copied ./claude/* -> ~/.claude/"
+deploy_claude_files
 
 # ============================
 #  Anthropic Skills Repository
@@ -853,7 +1131,7 @@ if command -v tree-sitter &>/dev/null; then
   echo "[INFO] tree-sitter-cli already installed: $(tree-sitter --version 2>/dev/null || echo 'version unknown')"
 else
   echo "[INFO] Installing tree-sitter-cli..."
-  npm install -g tree-sitter-cli
+  npm install -g tree-sitter-cli || echo "[WARN] tree-sitter-cli install failed (non-fatal)"
 fi
 
 # 安裝 emojify (bash script for git log emoji rendering)
@@ -873,7 +1151,8 @@ if command -v rtk &>/dev/null; then
   echo "[INFO] rtk already installed: $(rtk --version 2>/dev/null || echo 'version unknown')"
 else
   echo "[INFO] Installing RTK (Rust Token Killer)..."
-  curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh
+  curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh \
+    || echo "[WARN] RTK install failed (non-fatal)"
   # Ensure rtk is on PATH for the init step below
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
@@ -891,11 +1170,106 @@ fi
 # ============================
 #  UV (Python toolchain)
 # ============================
-if command -v uv &> /dev/null; then
-  echo "[INFO] uv already installed, skip"
+if [[ "$PYTHON_MODE" == "uv" ]]; then
+  if command -v uv &> /dev/null; then
+    echo "[INFO] uv already installed, skip"
+  else
+    echo "[INFO] Installing uv (Python toolchain)"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  fi
+  # Make sure subsequent steps in this script can find uv even on the
+  # very first run (its installer puts the binary in ~/.local/bin but
+  # doesn't relaunch the shell to update PATH).
+  export PATH="$HOME/.local/bin:$PATH"
 else
-  echo "[INFO] Installing uv (Python toolchain)"
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  echo "[INFO] syspython mode: skipping uv installation"
+fi
+
+# ============================
+#  Claude Code CLI (proot guest only)
+# ============================
+# Inside the proot Ubuntu guest the official native installer works as on
+# any Ubuntu host (glibc arm64). Other environments manage their own
+# Claude Code install, so this step is scoped to the guest.
+if [[ "$DOTFILES_ENV" == "proot" ]]; then
+  if command -v claude &>/dev/null; then
+    echo "[INFO] Claude Code already installed: $(claude --version 2>/dev/null || echo 'version unknown')"
+  else
+    echo "[INFO] Installing Claude Code (official installer)..."
+    curl -fsSL https://claude.ai/install.sh | bash \
+      || echo "[WARN] Claude Code install failed (non-fatal) — retry: curl -fsSL https://claude.ai/install.sh | bash"
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
+fi
+
+# ============================
+#  MCP servers — pdf_snip
+# ============================
+if [[ -d ./mcp/pdf_snip ]]; then
+  echo "[INFO] Setting up pdf_snip MCP server..."
+
+  # Resolve the absolute path of the dotfiles root so the MCP config
+  # snippet can point at it from anywhere on the filesystem.
+  DOTFILES_ROOT="$(pwd)"
+
+  # 1. Pre-sync the venv so the first MCP launch isn't slow.
+  if [[ "$PYTHON_MODE" == "uv" ]]; then
+    if command -v uv &>/dev/null; then
+      ( cd ./mcp/pdf_snip && uv sync ) \
+        || echo "[WARN] uv sync for pdf_snip failed (non-fatal)"
+    else
+      echo "[WARN] uv not on PATH — skipping pdf_snip venv sync"
+    fi
+  else
+    if command -v pip3 &>/dev/null; then
+      ( cd ./mcp/pdf_snip && pip3 install -q mcp pymupdf ) \
+        || echo "[WARN] pip3 install for pdf_snip failed (non-fatal)"
+    else
+      echo "[WARN] pip3 not found — skipping pdf_snip dep install"
+    fi
+  fi
+
+  # 2. Merge the MCP config snippet into ~/.claude.json (requires jq).
+  CLAUDE_JSON="$HOME/.claude.json"
+  SNIPPET="./mcp/pdf_snip/mcp_config_snippet.json"
+  if [[ -f "$SNIPPET" ]]; then
+    if ! command -v jq &>/dev/null; then
+      echo "[WARN] jq is not installed — cannot merge pdf_snip into $CLAUDE_JSON"
+      echo "       Install jq and re-run bootstrap, or add the entry manually:"
+      echo "       (snippet at $SNIPPET, replace __DOTFILES__ with $DOTFILES_ROOT)"
+    else
+      # Render the snippet with the actual dotfiles path.
+      if [[ "$PYTHON_MODE" == "syspython" ]]; then
+        RENDERED=$(jq --arg root "$DOTFILES_ROOT" '
+          .mcpServers["pdf-snip"].command = "python3" |
+          .mcpServers["pdf-snip"].args = [$root + "/mcp/pdf_snip/server.py"]
+        ' "$SNIPPET")
+      else
+        RENDERED=$(sed "s|__DOTFILES__|$DOTFILES_ROOT|g" "$SNIPPET")
+      fi
+
+      # If ~/.claude.json doesn't exist yet, start from {}.
+      if [[ ! -f "$CLAUDE_JSON" ]]; then
+        echo "{}" > "$CLAUDE_JSON"
+      fi
+
+      # Merge: existing config wins, but pdf-snip entry is set
+      # unconditionally (so re-running picks up path / arg changes).
+      # We tolerate failures (set -e is on) — the user can hand-edit.
+      if jq --argjson new "$RENDERED" '
+            .mcpServers = ((.mcpServers // {}) + $new.mcpServers)
+          ' "$CLAUDE_JSON" > "$CLAUDE_JSON.tmp" \
+        && mv "$CLAUDE_JSON.tmp" "$CLAUDE_JSON"; then
+        echo "[INFO] Merged pdf-snip into $CLAUDE_JSON"
+      else
+        rm -f "$CLAUDE_JSON.tmp"
+        echo "[WARN] Failed to merge pdf-snip into $CLAUDE_JSON"
+        echo "       (jq error or write permission?). You can paste the"
+        echo "       snippet manually after replacing __DOTFILES__:"
+        echo "       $SNIPPET"
+      fi
+    fi
+  fi
 fi
 
 # ============================
@@ -910,6 +1284,19 @@ if [[ "$PKG_MANAGER" == "apt" ]]; then
   fi
 fi
 
+# ============================
+#  Login shell (proot guest only)
+# ============================
+# Make future `proot-distro login` sessions land in zsh directly.
+if [[ "$DOTFILES_ENV" == "proot" ]] && command -v zsh &>/dev/null; then
+  CURRENT_SHELL=$(getent passwd "$(whoami)" 2>/dev/null | cut -d: -f7)
+  if [[ "$CURRENT_SHELL" != "$(command -v zsh)" ]]; then
+    chsh -s "$(command -v zsh)" 2>/dev/null \
+      && echo "[INFO] Login shell set to zsh" \
+      || echo "[WARN] chsh failed — run manually: chsh -s \$(which zsh)"
+  fi
+fi
+
 echo
 echo "===================================="
 echo "[DONE] Environment setup finished."
@@ -919,6 +1306,7 @@ echo " - nvm + Node 22 + tree-sitter-cli"
 echo " - emojify (git log emoji renderer)"
 echo " - RTK (Claude Code token optimizer)"
 echo " - uv (Python toolchain)"
+echo " - pdf-snip MCP server (mcp/pdf_snip)"
 echo " - fd-find, ripgrep, fzf, zoxide"
 echo " - Locale: en_US.UTF-8"
 if [[ "$HAS_SUDO" == false && "$PKG_MANAGER" != "brew" ]]; then

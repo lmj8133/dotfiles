@@ -12,12 +12,13 @@
 - **Node.js (NVM)**: Node 22 via nvm with tree-sitter-cli
 - **Smart Tools**: zoxide, fzf, fd-find, ripgrep for efficient navigation and searching
 - **Python Support**: uv toolchain with helpers (`act`, `pyinfo` commands)
+- **MCP servers**: `pdf-snip` for human-in-the-loop PDF region capture (under `mcp/`)
 
 ---
 
 ## Prerequisites
 
-- **OS**: Ubuntu/Debian Linux, macOS, or WSL2
+- **OS**: Ubuntu/Debian Linux, macOS, WSL2, or Termux on Android (via proot-distro Ubuntu — see [Termux / Android](#termux--android-eg-ayn-thor))
 - **Permissions**: Script auto-detects if you need sudo
 - **Internet**: Required for downloading packages and plugins
 
@@ -66,6 +67,104 @@ When you first start Zsh, Powerlevel10k will run the configuration wizard. Follo
 
 ---
 
+## Termux / Android (e.g. AYN Thor)
+
+On Android the bootstrap builds a **two-layer setup**: a thin Termux host layer
+(sshd on port 8022, tmux, a `dev` helper, wake-lock management) and a
+**proot-distro Ubuntu 24.04 guest** that hosts the full dev environment plus
+the official Claude Code CLI. Claude Code has no Android build (its native
+binary needs glibc), but inside the proot guest the official installer works
+unmodified. No root required; everything lives inside Termux's app data and is
+fully removed by uninstalling Termux.
+
+### One-time device preparation
+
+1. Install Termux **from F-Droid or GitHub** (never Google Play). Optionally
+   also install the Termux:Boot app **and open it once** (Android only
+   delivers boot events to apps that have been launched at least once) so
+   sshd starts right after a reboot.
+2. Grant Termux the "Display over other apps" permission so the boot
+   script can also open the Termux app itself — the session's foreground
+   notification is what keeps sshd alive past Android's empty-process
+   reaper (no wake-lock, no idle battery cost):
+
+   ```bash
+   adb shell appops set com.termux SYSTEM_ALERT_WINDOW allow
+   ```
+
+   Without this permission, sshd still starts at boot but is reclaimed a
+   few minutes later — then simply open Termux once and `.bashrc` brings
+   it back. (On multi-display devices, moving the window to another
+   display is left to the OS UI — programmatic placement lost too many
+   races against the OEM display manager to be worth automating.)
+3. Disable the Android 12+ phantom process killer, which otherwise SIGKILLs
+   long-running tmux/proot sessions (run from a computer with adb access):
+
+   ```bash
+   adb shell "settings put global settings_enable_monitor_phantom_procs false"
+   adb shell "settings get global settings_enable_monitor_phantom_procs"  # expect: false
+   ```
+
+   The flag survives reboots. Revert anytime with
+   `adb shell settings delete global settings_enable_monitor_phantom_procs`.
+4. In Android settings, set Termux's battery usage to **Unrestricted**.
+
+### Install
+
+```bash
+pkg install -y git
+git clone https://github.com/lmj8133/dotfiles ~/dotfiles
+cd ~/dotfiles && ./bootstrap.sh
+```
+
+The script detects Termux, sets up the host layer, installs the Ubuntu guest,
+and re-runs itself inside the guest to install everything else (a first run
+downloads a few GB — keep the device on power).
+
+### Daily use
+
+> **Warning**: leave Termux with the **Home** button. On some OEM
+> launchers (AYN included) swiping Termux out of the recents list — or
+> "clear all" — force-stops the whole app, killing sshd and every
+> session. The boot script therefore opens Termux excluded from the
+> recents list; a manually opened Termux is still swipeable.
+
+- On-device Termux sessions land straight in the dev tmux session (every
+  window opens inside Ubuntu); a second session from the drawer stays a
+  plain host shell while the first is attached. Over SSH, run `dev` to
+  attach the same session.
+- Wake-lock policy: a background watcher holds the lock while Claude
+  Code is **actively working** (CPU activity across claude and its
+  children) — close the screen mid-task and the turn keeps running; an
+  interactive session idling at its prompt releases the lock after
+  ~90s, so a chat left open does not drain the battery. SSH attaches
+  hold the lock for their duration. All holders go through `wl`, a
+  reference-counted wrapper (the Android lock is a singleton — raw
+  `termux-wake-unlock` would release everyone's grip). For manual
+  long-job holds use `wl acquire manual sticky` / `wl release manual`.
+- From a computer: `passwd` once in Termux, then
+  `ssh-copy-id -p 8022 <device-ip>` and `ssh -p 8022 <device-ip>`.
+- Claude Code login: if the browser OAuth callback fails, use the copy-URL /
+  paste-code fallback, or `claude setup-token`.
+
+### After every firmware OTA
+
+- Re-verify the phantom-procs flag (`settings get ...` should still be `false`).
+- Sanity-check proot performance (vendor updates have regressed it before).
+
+### Backup
+
+Archive the whole Ubuntu guest (container name `ubuntu-24.04`):
+
+```bash
+proot-distro backup --output /sdcard/ubuntu-24.04-backup.tar ubuntu-24.04
+```
+
+See `proot-distro backup --help` for compression options. The environment
+is also fully reproducible by re-running the bootstrap.
+
+---
+
 ## File Structure
 
 ```
@@ -82,6 +181,8 @@ dotfiles/
 │   ├── commands/        # Custom slash commands
 │   └── skills/          # Custom Claude Code skills (user-created)
 │       └── beamer-presentation/  # Example: Markdown to LaTeX Beamer converter
+├── mcp/                 # Local MCP servers wired into Claude Code
+│   └── pdf_snip/        # PDF region → PNG with browser GUI review
 ├── nvim/                # Neovim configuration
 │   ├── init.lua         # Main Neovim config (LSP, plugins, keymaps)
 │   └── lua/             # Lua modules for local overrides
@@ -91,6 +192,9 @@ dotfiles/
 │   └── tmux.conf        # Tmux config file
 ├── templates/           # Template files for various tools
 │   └── clangd/          # Clangd configuration templates
+├── termux/              # Termux host-layer files (Android)
+│   ├── dev              # tmux + proot-login + wake-lock session helper
+│   └── termux.properties  # Terminal settings (extra keys row)
 └── zsh/                 # Zsh configuration
     ├── zprofile         # Login-time environment (Homebrew, locale)
     ├── zshrc            # Interactive config (plugins, aliases, keybindings)

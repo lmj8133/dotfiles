@@ -1,0 +1,61 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Open (or attach to) the main dev session inside the proot Ubuntu guest.
+#
+# Battery model: a wake-lock is needed only when attached over SSH (the
+# screen is off and the device must not doze mid-session). On-device
+# attaches skip it — the lit screen already keeps the CPU awake. For
+# long unattended jobs (screen off, detached) run `termux-wake-lock`
+# manually.
+#
+# Usage: dev                 # attach or create the "main" session
+#        DEV_SESSION=x dev   # use a different tmux session name
+set -u
+
+CONTAINER="${DEV_CONTAINER:-ubuntu-24.04}"
+SESSION="${DEV_SESSION:-main}"
+# --shared-tmp (supported by proot-distro 4.x and 5.x) exposes Termux
+# $PREFIX/tmp as /tmp inside the guest.
+LOGIN_CMD="proot-distro login $CONTAINER --shared-tmp"
+
+# Wake-lock via the reference-counted wl helper: this client holds its
+# own lease for the duration of an SSH attach; concurrent holders (other
+# clients, the claude watcher, manual leases) are unaffected.
+WL="$HOME/.local/bin/wl"
+LOCK_ACQUIRED=0
+if [ -n "${SSH_CONNECTION:-}" ] && [ -x "$WL" ]; then
+  "$WL" acquire "dev-$$" "$$"
+  LOCK_ACQUIRED=1
+fi
+
+release_lease() {
+  [ "$LOCK_ACQUIRED" = 1 ] && "$WL" release "dev-$$"
+}
+trap release_lease EXIT
+
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+  tmux new-session -d -s "$SESSION" "$LOGIN_CMD"
+  # Every window/pane created later in this session also lands in the guest.
+  tmux set-option -t "$SESSION" default-command "$LOGIN_CMD"
+fi
+
+if [ -n "$(tmux list-clients -t "$SESSION" 2>/dev/null)" ]; then
+  # Someone is already attached: join through a grouped session so each
+  # client keeps an independent current-window over the shared windows.
+  # (destroy-unattached cannot be used here — tmux reaps a detached
+  # session the moment the option is set, before we can attach.)
+  for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E "^${SESSION}[0-9]+$"); do
+    [ -z "$(tmux list-clients -t "$s" 2>/dev/null)" ] && tmux kill-session -t "$s" 2>/dev/null
+  done
+  i=2
+  while tmux has-session -t "$SESSION$i" 2>/dev/null; do i=$((i + 1)); done
+  tmux new-session -d -t "$SESSION" -s "$SESSION$i"
+  # Session options are not shared across a group — mirror the one that
+  # matters before the client can open windows.
+  tmux set-option -t "$SESSION$i" default-command "$LOGIN_CMD"
+  tmux attach -t "$SESSION$i"
+  # Client detached (or attach failed) — clean up if nobody else joined.
+  [ -z "$(tmux list-clients -t "$SESSION$i" 2>/dev/null)" ] \
+    && tmux kill-session -t "$SESSION$i" 2>/dev/null
+  exit 0
+fi
+tmux attach -t "$SESSION"
