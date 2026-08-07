@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Reference-counted wrapper around Termux's singleton wake-lock.
+#
+# Android exposes ONE wake-lock per Termux; independent holders (dev
+# over SSH, the claude watcher, manual holds) would otherwise release
+# each other's grip. Holders take named leases instead; the device
+# lock is released only when the last live lease is gone.
+#
+# Usage:
+#   wl acquire <name> [pid]  # take a lease (+ the device lock);
+#                            # lease dies with pid (default: caller)
+#   wl release <name>        # drop a lease; unlock if none remain
+#   wl status                # list live leases
+#
+# A non-numeric pid (e.g. "sticky") makes a lease survive until an
+# explicit release — for manual holds: wl acquire manual sticky
+set -u
+
+DIR="$HOME/.cache/wakelock-leases"
+mkdir -p "$DIR"
+
+gc() {
+  local f pid
+  for f in "$DIR"/*; do
+    [ -f "$f" ] || continue
+    pid=$(cat "$f" 2>/dev/null)
+    case "$pid" in
+      ''|*[!0-9]*) continue ;;  # sticky lease — never collected
+    esac
+    kill -0 "$pid" 2>/dev/null || rm -f "$f"
+  done
+}
+
+case "${1:-status}" in
+  acquire)
+    echo "${3:-$PPID}" > "$DIR/${2:?lease name required}"
+    termux-wake-lock 2>/dev/null || true
+    ;;
+  release)
+    rm -f "$DIR/${2:?lease name required}"
+    gc
+    if [ -z "$(ls -A "$DIR" 2>/dev/null)" ]; then
+      termux-wake-unlock 2>/dev/null || true
+      echo "[wl] wake-lock released (no leases remain)"
+    fi
+    ;;
+  status)
+    gc
+    ls "$DIR" 2>/dev/null
+    ;;
+  *)
+    echo "usage: wl acquire <name> [pid] | wl release <name> | wl status" >&2
+    exit 1
+    ;;
+esac

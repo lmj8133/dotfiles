@@ -17,23 +17,20 @@ SESSION="${DEV_SESSION:-main}"
 # $PREFIX/tmp as /tmp inside the guest.
 LOGIN_CMD="proot-distro login $CONTAINER --shared-tmp"
 
+# Wake-lock via the reference-counted wl helper: this client holds its
+# own lease for the duration of an SSH attach; concurrent holders (other
+# clients, the claude watcher, manual leases) are unaffected.
+WL="$HOME/.local/bin/wl"
 LOCK_ACQUIRED=0
-if [ -n "${SSH_CONNECTION:-}" ]; then
-  termux-wake-lock 2>/dev/null || true
+if [ -n "${SSH_CONNECTION:-}" ] && [ -x "$WL" ]; then
+  "$WL" acquire "dev-$$" "$$"
   LOCK_ACQUIRED=1
 fi
 
-release_lock_if_last() {
-  # The Termux wake-lock is a device-wide singleton — release only what
-  # we acquired, and only when no client remains attached anywhere
-  # (grouped sessions included).
-  [ "$LOCK_ACQUIRED" = 1 ] || return 0
-  if [ -z "$(tmux list-clients 2>/dev/null)" ]; then
-    termux-wake-unlock 2>/dev/null || true
-    echo "[dev] wake-lock released (run termux-wake-lock to keep background work alive)"
-  fi
+release_lease() {
+  [ "$LOCK_ACQUIRED" = 1 ] && "$WL" release "dev-$$"
 }
-trap release_lock_if_last EXIT
+trap release_lease EXIT
 
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
   tmux new-session -d -s "$SESSION" "$LOGIN_CMD"

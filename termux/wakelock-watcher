@@ -67,11 +67,11 @@ while true; do
 
   if [ "$cur" -gt 0 ] && [ "$idle_count" -eq 0 ]; then
     if [ "$LOCKED" = 0 ]; then
-      termux-wake-lock 2>/dev/null || true
+      "$HOME/.local/bin/wl" acquire claude-watch "$$"
       LOCKED=1
     fi
   elif [ "$idle_count" -ge "$IDLE_SAMPLES" ] && [ "$LOCKED" = 1 ]; then
-    termux-wake-unlock 2>/dev/null || true
+    "$HOME/.local/bin/wl" release claude-watch >/dev/null
     LOCKED=0
   fi
   sleep "$INTERVAL"

@@ -106,13 +106,16 @@ EOF
     chmod +x "$HOME/.local/bin/dev"
     echo "[INFO] Installed dev helper -> ~/.local/bin/dev"
   fi
-  # Wake-lock watcher: holds the lock exactly while claude runs, so an
-  # agent task survives the screen being closed mid-run
-  if [[ -f ./termux/wakelock-watcher ]]; then
-    cp ./termux/wakelock-watcher "$HOME/.local/bin/wakelock-watcher"
-    chmod +x "$HOME/.local/bin/wakelock-watcher"
-    echo "[INFO] Installed wakelock-watcher -> ~/.local/bin/wakelock-watcher"
-  fi
+  # Wake-lock tooling: wl (reference-counted lease wrapper around the
+  # singleton Termux wake-lock) and the watcher that leases it while
+  # claude is actively working
+  for tool in wl wakelock-watcher; do
+    if [[ -f "./termux/$tool" ]]; then
+      cp "./termux/$tool" "$HOME/.local/bin/$tool"
+      chmod +x "$HOME/.local/bin/$tool"
+      echo "[INFO] Installed $tool -> ~/.local/bin/$tool"
+    fi
+  done
   if ! grep -q '\.local/bin' "$HOME/.bashrc" 2>/dev/null; then
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
   fi
