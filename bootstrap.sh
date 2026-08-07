@@ -83,6 +83,10 @@ tmux has-session -t main 2>/dev/null || {
 }
 pgrep -f wakelock-watcher >/dev/null \
   || tmux new-session -d -s svc "$HOME/.local/bin/wakelock-watcher"
+# Secondary displays come up later than boot — keep nudging the window
+# to the preferred display for a few minutes (self-ending session)
+[ -f "$HOME/.termux/boot-display" ] && tmux new-session -d -s place \
+  'n=0; while [ $n -lt 12 ]; do sleep 20; n=$((n+1)); /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" --activity-exclude-from-recents -n com.termux/.HomeActivity >/dev/null 2>&1; done'
 if [ -f "$HOME/.termux/boot-display" ]; then
   /system/bin/am start --display "$(cat "$HOME/.termux/boot-display")" \
     --activity-exclude-from-recents \
@@ -134,6 +138,9 @@ EOF
   # First interactive session after boot: hand protection over from the
   # boot lease to normal policy, and move the window to the preferred
   # display (the boot script can fire before the display exists)
+  if ! grep -q 'alias td=' "$HOME/.bashrc" 2>/dev/null; then
+    echo "alias td='/system/bin/am start --display \"\$(cat \"\$HOME/.termux/boot-display\")\" --activity-exclude-from-recents -n com.termux/.HomeActivity'" >> "$HOME/.bashrc"
+  fi
   if ! grep -q 'wl release boot' "$HOME/.bashrc" 2>/dev/null; then
     cat >> "$HOME/.bashrc" <<'EOF'
 "$HOME/.local/bin/wl" release boot >/dev/null 2>&1
