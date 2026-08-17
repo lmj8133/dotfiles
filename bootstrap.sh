@@ -400,13 +400,21 @@ clone_if_missing() {
 # syspython mode: remove UV_ONLY content entirely, keep UV_FREE content (sentinels removed).
 strip_uv_sentinels() {
   local file="$1"
+  # Use a temp file instead of `sed -i` because BSD sed (macOS) requires an
+  # explicit backup-suffix argument after -i while GNU sed (Linux) does not;
+  # this form works identically on both.
+  local tmp
+  tmp="$(mktemp)"
   if [[ "$PYTHON_MODE" == "syspython" ]]; then
-    sed -i '/<!-- UV_ONLY_START -->/,/<!-- UV_ONLY_END -->/d' "$file"
-    sed -i '/<!-- UV_FREE_START -->/d; /<!-- UV_FREE_END -->/d' "$file"
+    sed -e '/<!-- UV_ONLY_START -->/,/<!-- UV_ONLY_END -->/d' \
+        -e '/<!-- UV_FREE_START -->/d' -e '/<!-- UV_FREE_END -->/d' \
+        "$file" > "$tmp"
   else
-    sed -i '/<!-- UV_ONLY_START -->/d; /<!-- UV_ONLY_END -->/d' "$file"
-    sed -i '/<!-- UV_FREE_START -->/,/<!-- UV_FREE_END -->/d' "$file"
+    sed -e '/<!-- UV_ONLY_START -->/d' -e '/<!-- UV_ONLY_END -->/d' \
+        -e '/<!-- UV_FREE_START -->/,/<!-- UV_FREE_END -->/d' \
+        "$file" > "$tmp"
   fi
+  mv "$tmp" "$file"
 }
 
 CLAUDE_FILES_WITH_UV=(
