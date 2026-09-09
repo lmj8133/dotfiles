@@ -181,6 +181,62 @@ for _claude_suffix in "${CLAUDE_ALT_SUFFIXES[@]}"; do
 done
 unset _claude_suffix
 
+# Show subscription usage for all logged-in accounts as one table, one row per
+# account. Each account is queried through `claude -p "/usage"`, which spends
+# one session; the email is read locally from .claude.json.
+claude-usage() {
+  local suffix dir label email out
+  {
+    printf 'ACCOUNT\tEMAIL\tSESSION(5H)\tSESSION-RESET\tWEEK\tWEEK(MODEL)\tWEEK-RESET\n'
+    for suffix in "" "${CLAUDE_ALT_SUFFIXES[@]}"; do
+      dir="$HOME/.claude${suffix:+-$suffix}"
+      [[ -f "$dir/.credentials.json" ]] || continue
+      label="${suffix:-main}"
+
+      # `claude.json` sits inside the config dir for alt accounts, but at
+      # $HOME/.claude.json for the default one.
+      local cfg="$dir/.claude.json"
+      [[ -z "$suffix" ]] && cfg="$HOME/.claude.json"
+      email="$(python3 -c "
+import json,sys
+try:
+    print(json.load(open(sys.argv[1]))['oauthAccount']['emailAddress'])
+except Exception:
+    print('?')
+" "$cfg" 2>/dev/null || echo '?')"
+
+      out="$(CLAUDE_CONFIG_DIR="$dir" claude -p "/usage" 2>/dev/null)"
+      if [[ -z "$out" ]]; then
+        printf '%s\t%s\t?\t?\t?\t?\tquery failed\n' "$label" "$email"
+        continue
+      fi
+      print -r -- "$out" | awk -v acct="$label" -v email="$email" '
+        /^Current /{
+          line = $0
+          sub(/^Current /, "", line)
+          idx   = index(line, ":")
+          scope = substr(line, 1, idx - 1)
+          rest  = substr(line, idx + 2)
+          used  = rest; sub(/ used.*$/, "", used)
+          reset = rest; sub(/^.*resets /, "", reset); sub(/ *\([^)]*\)$/, "", reset)
+          if (scope == "session")                 { sess = used; sreset = reset }
+          else if (scope ~ /all models/)          { week = used; wreset = reset }
+          else if (scope ~ /^week/)               { opus = used
+                                                    mname = scope
+                                                    sub(/^week *\(/, "", mname)
+                                                    sub(/\)$/, "", mname) }
+        }
+        END{
+          printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", acct, email,
+                 (sess ? sess : "-"), (sreset ? sreset : "-"),
+                 (week ? week : "-"),
+                 (opus ? opus " (" mname ")" : "-"),
+                 (wreset ? wreset : "-")
+        }'
+    done
+  } | column -t -s $'\t'
+}
+
 ########## Local overrides ##########
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
 
