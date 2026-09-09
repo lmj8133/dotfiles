@@ -187,15 +187,16 @@ unset _claude_dir _claude_suffix
 
 # Show subscription usage for all logged-in accounts as one table, one row per
 # account. Each account is queried through `claude -p "/usage"`, which spends
-# one session; the email is read locally from .claude.json.
+# one session; the account is identified by the email read locally from
+# .claude.json, falling back to the config-dir suffix if that lookup fails.
+# Each reset timestamp is annotated with the remaining time until it fires.
 claude-usage() {
   local suffix dir label email out
   {
-    printf 'ACCOUNT\tEMAIL\tSESSION(5H)\tSESSION-RESET\tWEEK\tWEEK(MODEL)\tWEEK-RESET\n'
+    printf 'ACCOUNT\tSESSION(5H)\tSESSION-RESET\tWEEK\tWEEK(MODEL)\tWEEK-RESET\n'
     for suffix in "" "${CLAUDE_ALT_SUFFIXES[@]}"; do
       dir="$HOME/.claude${suffix:+-account-$suffix}"
       [[ -f "$dir/.credentials.json" ]] || continue
-      label="${suffix:-main}"
 
       # `claude.json` sits inside the config dir for alt accounts, but at
       # $HOME/.claude.json for the default one.
@@ -206,15 +207,16 @@ import json,sys
 try:
     print(json.load(open(sys.argv[1]))['oauthAccount']['emailAddress'])
 except Exception:
-    print('?')
-" "$cfg" 2>/dev/null || echo '?')"
+    print('')
+" "$cfg" 2>/dev/null)"
+      label="${email:-${suffix:-main}}"
 
       out="$(CLAUDE_CONFIG_DIR="$dir" claude -p "/usage" 2>/dev/null)"
       if [[ -z "$out" ]]; then
-        printf '%s\t%s\t?\t?\t?\t?\tquery failed\n' "$label" "$email"
+        printf '%s\t?\t?\t?\t?\tquery failed\n' "$label"
         continue
       fi
-      print -r -- "$out" | awk -v acct="$label" -v email="$email" '
+      print -r -- "$out" | awk -v acct="$label" '
         /^Current /{
           line = $0
           sub(/^Current /, "", line)
@@ -222,7 +224,7 @@ except Exception:
           scope = substr(line, 1, idx - 1)
           rest  = substr(line, idx + 2)
           used  = rest; sub(/ used.*$/, "", used)
-          reset = rest; sub(/^.*resets /, "", reset); sub(/ *\([^)]*\)$/, "", reset)
+          reset = rest; sub(/^.*resets /, "", reset)
           if (scope == "session")                 { sess = used; sreset = reset }
           else if (scope ~ /all models/)          { week = used; wreset = reset }
           else if (scope ~ /^week/)               { opus = used
@@ -231,14 +233,79 @@ except Exception:
                                                     sub(/\)$/, "", mname) }
         }
         END{
-          printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", acct, email,
+          printf "%s\t%s\t%s\t%s\t%s\t%s\n", acct,
                  (sess ? sess : "-"), (sreset ? sreset : "-"),
                  (week ? week : "-"),
                  (opus ? opus " (" mname ")" : "-"),
                  (wreset ? wreset : "-")
         }'
     done
-  } | column -t -s $'\t'
+  } | python3 -c '
+import re, sys
+from datetime import datetime, timedelta
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
+
+PAREN = re.compile(r"^(.*) \(([^()]+)\)$")
+
+
+def countdown(stamp, tzname):
+    """Turn a reset stamp + "Asia/Taipei" into a "2h13m" style delta."""
+    tz = None
+    if ZoneInfo is not None:
+        try:
+            tz = ZoneInfo(tzname)
+        except Exception:
+            tz = None
+    now = datetime.now(tz)
+    # /usage drops empty parts: "Sep 15, 4am", "Sep 9, 2:49pm", "4:30pm", "4pm".
+    for fmt in ("%b %d, %I:%M%p", "%b %d, %I%p", "%I:%M%p", "%I%p"):
+        try:
+            when = datetime.strptime(stamp, fmt)
+        except ValueError:
+            continue
+        dated = "%b" in fmt
+        break
+    else:
+        return None
+    if dated:
+        # The year is never printed; pick the one that lands nearest to now.
+        when = when.replace(year=now.year, tzinfo=now.tzinfo)
+        if when < now - timedelta(days=180):
+            when = when.replace(year=now.year + 1)
+        elif when > now + timedelta(days=180):
+            when = when.replace(year=now.year - 1)
+    else:
+        when = when.replace(year=now.year, month=now.month, day=now.day,
+                            tzinfo=now.tzinfo)
+        if when < now:
+            when += timedelta(days=1)
+    secs = int((when - now).total_seconds())
+    if secs <= 0:
+        return "now"
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    mins = rem // 60
+    if days:
+        return "%dd%dh" % (days, hours)
+    if hours:
+        return "%dh%dm" % (hours, mins)
+    return "%dm" % mins
+
+
+for line in sys.stdin:
+    fields = line.rstrip("\n").split("\t")
+    for i, field in enumerate(fields):
+        m = PAREN.match(field)
+        if not m:
+            continue
+        left = countdown(m.group(1), m.group(2))
+        if left:  # non-timestamp parentheses, e.g. "58% (Fable)", stay as-is
+            fields[i] = m.group(1) + " (" + left + ")"
+    print("\t".join(fields))
+' | column -t -s $'\t'
 }
 
 ########## Local overrides ##########
