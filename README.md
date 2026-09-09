@@ -44,9 +44,10 @@ cd /path/to/dotfiles
 - Copies `nvim/init.lua` and `nvim/lua/` to `~/.config/nvim/`
 - Copies `tmux/tmux.conf` to `~/.tmux.conf`
 - Copies `bin/` scripts to `~/.local/bin/`
-- Copies Claude Code configurations from `claude/` to `~/.claude/` (includes CLAUDE.md, commands, skills)
+- Copies Claude Code configurations from `claude/` to every dir in `CLAUDE_CONFIG_DIRS` (`~/.claude/` and `~/.claude-b/`; includes CLAUDE.md, commands, skills)
+- `~/.claude-b/` is an isolated config dir for a second Claude account: run `claude-b` (alias sets `CLAUDE_CONFIG_DIR`) and log in once with the other account
 - Clones Anthropic official skills repository to `~/.local/share/anthropics-skills/`
-- Installs all Anthropic official skills to `~/.claude/skills/` (preserves user customizations)
+- Installs all Anthropic official skills to `<config dir>/skills/` of every config dir (preserves user customizations)
 - Preserves local overrides (`~/.zshrc.local`, `~/.config/nvim/lua/local.lua`) if they exist
 - Clones Zsh plugins to `~/.local/share/zsh-plugins/`
 - Installs nvm + Node 22 + tree-sitter-cli

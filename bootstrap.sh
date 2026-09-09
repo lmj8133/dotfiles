@@ -398,15 +398,21 @@ clone_if_missing() {
 # Strip UV_ONLY / UV_FREE sentinel blocks from a deployed ~/.claude file.
 # uv mode:       remove sentinel lines only, keep UV_ONLY content, remove UV_FREE content.
 # syspython mode: remove UV_ONLY content entirely, keep UV_FREE content (sentinels removed).
+# BSD sed (macOS) and GNU sed disagree on `-i`, so write to a temp file
+# and move it back instead of editing in place.
 strip_uv_sentinels() {
   local file="$1"
+  local tmp="$file.tmp"
   if [[ "$PYTHON_MODE" == "syspython" ]]; then
-    sed -i '/<!-- UV_ONLY_START -->/,/<!-- UV_ONLY_END -->/d' "$file"
-    sed -i '/<!-- UV_FREE_START -->/d; /<!-- UV_FREE_END -->/d' "$file"
+    sed -e '/<!-- UV_ONLY_START -->/,/<!-- UV_ONLY_END -->/d' \
+        -e '/<!-- UV_FREE_START -->/d' -e '/<!-- UV_FREE_END -->/d' \
+        "$file" > "$tmp"
   else
-    sed -i '/<!-- UV_ONLY_START -->/d; /<!-- UV_ONLY_END -->/d' "$file"
-    sed -i '/<!-- UV_FREE_START -->/,/<!-- UV_FREE_END -->/d' "$file"
+    sed -e '/<!-- UV_ONLY_START -->/d' -e '/<!-- UV_ONLY_END -->/d' \
+        -e '/<!-- UV_FREE_START -->/,/<!-- UV_FREE_END -->/d' \
+        "$file" > "$tmp"
   fi
+  mv "$tmp" "$file"
 }
 
 CLAUDE_FILES_WITH_UV=(
@@ -417,18 +423,63 @@ CLAUDE_FILES_WITH_UV=(
   "claude/skills/review/references/checklists.md"
 )
 
+# Claude Code config directories to deploy into.
+# The first is the default (~/.claude). Extra entries are alternate
+# CLAUDE_CONFIG_DIR targets used for a second account (see zsh/zshrc,
+# alias `claude-b`). Each dir keeps its own login, settings and history,
+# so the shared CLAUDE.md / rules / skills must be deployed into each.
+CLAUDE_CONFIG_DIRS=(
+  "$HOME/.claude"
+  "$HOME/.claude-b"
+)
+
+# Usage: deploy_claude_files <config_dir>
 deploy_claude_files() {
-  mkdir -p "$HOME/.claude"
-  cp -r ./claude/* "$HOME/.claude/"
-  echo "[INFO] Copied ./claude/* -> ~/.claude/"
+  local config_dir="$1"
+  mkdir -p "$config_dir"
+  cp -r ./claude/* "$config_dir/"
+  echo "[INFO] Copied ./claude/* -> $config_dir/"
   echo "[INFO] Stripping UV sentinels (mode: $PYTHON_MODE)..."
   for rel_path in "${CLAUDE_FILES_WITH_UV[@]}"; do
-    local dest="$HOME/.claude/${rel_path#claude/}"
+    local dest="$config_dir/${rel_path#claude/}"
     if [[ -f "$dest" ]]; then
       strip_uv_sentinels "$dest"
       echo "[INFO]   Processed: $dest"
     fi
   done
+}
+
+# Copy official skills from a local anthropics/skills clone into a config
+# dir's skills/ folder. Existing skill dirs are left untouched so user
+# customizations survive re-runs.
+# Usage: install_official_skills <skills_src_dir> <config_dir>
+install_official_skills() {
+  local skills_src="$1"
+  local config_dir="$2"
+  local installed=0
+  local skipped=0
+  echo "[INFO] Installing Anthropic official skills to $config_dir/skills/"
+  mkdir -p "$config_dir/skills"
+
+  for skill_dir in "$skills_src"/*; do
+    if [[ -d "$skill_dir" && -f "$skill_dir/SKILL.md" ]]; then
+      local skill_name
+      skill_name=$(basename "$skill_dir")
+      local target_dir="$config_dir/skills/$skill_name"
+
+      # Skip if user already has this skill (preserve customizations)
+      if [[ -d "$target_dir" ]]; then
+        echo "[INFO] $skill_name already exists, skip (preserving user version)"
+        ((++skipped))
+      else
+        cp -r "$skill_dir" "$target_dir"
+        echo "[INFO] Installed skill: $skill_name"
+        ((++installed))
+      fi
+    fi
+  done
+
+  echo "[INFO] Installed $installed official skills ($skipped skipped) -> $config_dir/skills/"
 }
 
 # ============================
@@ -1023,7 +1074,9 @@ fi
 # ============================
 #  Claude Code config
 # ============================
-deploy_claude_files
+for claude_config_dir in "${CLAUDE_CONFIG_DIRS[@]}"; do
+  deploy_claude_files "$claude_config_dir"
+done
 
 # ============================
 #  Anthropic Skills Repository
@@ -1040,31 +1093,11 @@ cd "$HOME/.local/share"
 clone_if_missing "https://github.com/anthropics/skills.git" "anthropics-skills"
 cd - > /dev/null
 
-# Copy official skills to ~/.claude/skills/ (preserve user customizations)
+# Copy official skills into every Claude config dir (preserve user customizations)
 if [[ -d "$ANTHROPICS_SKILLS_DIR/skills" ]]; then
-  echo "[INFO] Installing Anthropic official skills to ~/.claude/skills/"
-
-  INSTALLED_COUNT=0
-  SKIPPED_COUNT=0
-
-  for skill_dir in "$ANTHROPICS_SKILLS_DIR/skills"/*; do
-    if [[ -d "$skill_dir" && -f "$skill_dir/SKILL.md" ]]; then
-      skill_name=$(basename "$skill_dir")
-      target_dir="$HOME/.claude/skills/$skill_name"
-
-      # Skip if user already has this skill (preserve customizations)
-      if [[ -d "$target_dir" ]]; then
-        echo "[INFO] $skill_name already exists, skip (preserving user version)"
-        ((++SKIPPED_COUNT))
-      else
-        cp -r "$skill_dir" "$target_dir"
-        echo "[INFO] Installed skill: $skill_name"
-        ((++INSTALLED_COUNT))
-      fi
-    fi
+  for claude_config_dir in "${CLAUDE_CONFIG_DIRS[@]}"; do
+    install_official_skills "$ANTHROPICS_SKILLS_DIR/skills" "$claude_config_dir"
   done
-
-  echo "[INFO] Installed $INSTALLED_COUNT official skills ($SKIPPED_COUNT skipped)"
 else
   echo "[WARN] Anthropic skills repository not found at $ANTHROPICS_SKILLS_DIR, skip skill installation"
 fi
