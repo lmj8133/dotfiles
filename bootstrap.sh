@@ -431,15 +431,12 @@ CLAUDE_FILES_WITH_UV=(
 # settings and history, so the shared CLAUDE.md / rules / skills must be
 # deployed into each.
 #
-# CLAUDE_ALT_SUFFIXES lists the accounts this repo creates by default. Any
-# extra ~/.claude-account-<suffix>/ dir found on disk (e.g. one the user made with
-# `mkdir`) is deployed into as well, so zsh/zshrc's disk-based alias discovery
-# and this list stay in sync without editing either.
-CLAUDE_ALT_SUFFIXES=(b c)
+# Alt accounts are discovered from disk, never created here: deploying into a
+# dir also creates it, and an empty ~/.claude-account-<suffix>/ is not free --
+# zsh/zshrc turns every such dir into a `claude-<suffix>` alias, so pre-making
+# accounts nobody logged into just leaves dead aliases behind. To add one,
+# `mkdir ~/.claude-account-<suffix>` and log in; the next run picks it up.
 CLAUDE_CONFIG_DIRS=("$HOME/.claude")
-for claude_suffix in "${CLAUDE_ALT_SUFFIXES[@]}"; do
-  CLAUDE_CONFIG_DIRS+=("$HOME/.claude-account-$claude_suffix")
-done
 for claude_config_dir in "$HOME"/.claude-account-*/; do
   claude_config_dir="${claude_config_dir%/}"
   [[ -d "$claude_config_dir" ]] || continue
