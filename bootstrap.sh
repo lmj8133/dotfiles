@@ -398,11 +398,13 @@ clone_if_missing() {
 # Strip UV_ONLY / UV_FREE sentinel blocks from a deployed ~/.claude file.
 # uv mode:       remove sentinel lines only, keep UV_ONLY content, remove UV_FREE content.
 # syspython mode: remove UV_ONLY content entirely, keep UV_FREE content (sentinels removed).
-# BSD sed (macOS) and GNU sed disagree on `-i`, so write to a temp file
-# and move it back instead of editing in place.
 strip_uv_sentinels() {
   local file="$1"
-  local tmp="$file.tmp"
+  # Use a temp file instead of `sed -i` because BSD sed (macOS) requires an
+  # explicit backup-suffix argument after -i while GNU sed (Linux) does not;
+  # this form works identically on both.
+  local tmp
+  tmp="$(mktemp)"
   if [[ "$PYTHON_MODE" == "syspython" ]]; then
     sed -e '/<!-- UV_ONLY_START -->/,/<!-- UV_ONLY_END -->/d' \
         -e '/<!-- UV_FREE_START -->/d' -e '/<!-- UV_FREE_END -->/d' \
