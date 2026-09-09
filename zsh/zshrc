@@ -196,10 +196,11 @@ claude-usage() {
     printf 'ACCOUNT\tSESSION(5H)\tSESSION-RESET\tWEEK\tWEEK(MODEL)\tWEEK-RESET\n'
     for suffix in "" "${CLAUDE_ALT_SUFFIXES[@]}"; do
       dir="$HOME/.claude${suffix:+-account-$suffix}"
-      [[ -f "$dir/.credentials.json" ]] || continue
 
       # `claude.json` sits inside the config dir for alt accounts, but at
-      # $HOME/.claude.json for the default one.
+      # $HOME/.claude.json for the default one. Its `oauthAccount` block is
+      # what marks the account as logged in; the credentials themselves live
+      # in the macOS Keychain, so there is no file to probe for.
       local cfg="$dir/.claude.json"
       [[ -z "$suffix" ]] && cfg="$HOME/.claude.json"
       email="$(python3 -c "
@@ -209,7 +210,8 @@ try:
 except Exception:
     print('')
 " "$cfg" 2>/dev/null)"
-      label="${email:-${suffix:-main}}"
+      [[ -n "$email" ]] || continue
+      label="$email"
 
       out="$(CLAUDE_CONFIG_DIR="$dir" claude -p "/usage" 2>/dev/null)"
       if [[ -z "$out" ]]; then
@@ -233,6 +235,12 @@ except Exception:
                                                     sub(/\)$/, "", mname) }
         }
         END{
+          # `/usage` only reports for subscription logins; anything else (API
+          # key, logged out) answers without a single "Current ..." line.
+          if (!sess && !week && !opus) {
+            printf "%s\t-\t-\t-\t-\tno usage data\n", acct
+            exit
+          }
           printf "%s\t%s\t%s\t%s\t%s\t%s\n", acct,
                  (sess ? sess : "-"), (sreset ? sreset : "-"),
                  (week ? week : "-"),
@@ -260,10 +268,13 @@ def countdown(stamp, tzname):
         except Exception:
             tz = None
     now = datetime.now(tz)
-    # /usage drops empty parts: "Sep 15, 4am", "Sep 9, 2:49pm", "4:30pm", "4pm".
+    # /usage drops empty parts: "Sep 15 at 4am", "Sep 9 at 2:49pm", "4:30pm",
+    # "4pm". Older builds wrote "Sep 15, 4am"; accept both spellings.
+    stamp = stamp.replace(" at ", ", ")
     for fmt in ("%b %d, %I:%M%p", "%b %d, %I%p", "%I:%M%p", "%I%p"):
         try:
-            when = datetime.strptime(stamp, fmt)
+            # The year is never printed; feed one in so strptime stays happy.
+            when = datetime.strptime("%s %d" % (stamp, now.year), fmt + " %Y")
         except ValueError:
             continue
         dated = "%b" in fmt
@@ -271,8 +282,8 @@ def countdown(stamp, tzname):
     else:
         return None
     if dated:
-        # The year is never printed; pick the one that lands nearest to now.
-        when = when.replace(year=now.year, tzinfo=now.tzinfo)
+        # Pick the year that lands nearest to now.
+        when = when.replace(tzinfo=now.tzinfo)
         if when < now - timedelta(days=180):
             when = when.replace(year=now.year + 1)
         elif when > now + timedelta(days=180):
