@@ -1211,13 +1211,29 @@ else
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
 
-# Set up Claude Code integration (hook + RTK.md)
+# Set up Claude Code integration (hook + RTK.md).
+# `rtk init` patches ~/.claude/settings.json (PreToolUse hook) and appends
+# `@RTK.md` to ~/.claude/CLAUDE.md. deploy_claude_files() above overwrites both
+# files from ./claude/, so the patch must be re-applied on every run — testing
+# for the hook script alone would skip it and silently leave RTK disabled.
+# `rtk init` is idempotent, so running it unconditionally is safe.
 if command -v rtk &>/dev/null; then
-  if [[ -f "$HOME/.claude/hooks/rtk-rewrite.sh" ]]; then
-    echo "[INFO] RTK Claude Code hook already installed, skip"
+  echo "[INFO] Setting up RTK Claude Code integration..."
+  if rtk init -g --auto-patch; then
+    # rtk only knows about ~/.claude. The hook path it writes into
+    # settings.json is absolute, so the extra account dirs can share the same
+    # hook script; they just need the patched settings.json / CLAUDE.md plus
+    # their own RTK.md (an `@RTK.md` import resolves next to its CLAUDE.md).
+    for claude_config_dir in "${CLAUDE_CONFIG_DIRS[@]}"; do
+      [[ "$claude_config_dir" == "$HOME/.claude" ]] && continue
+      [[ -d "$claude_config_dir" ]] || continue
+      cp "$HOME/.claude/RTK.md" "$claude_config_dir/RTK.md"
+      cp "$HOME/.claude/settings.json" "$claude_config_dir/settings.json"
+      cp "$HOME/.claude/CLAUDE.md" "$claude_config_dir/CLAUDE.md"
+      echo "[INFO]   Mirrored RTK config -> $claude_config_dir"
+    done
   else
-    echo "[INFO] Setting up RTK Claude Code integration..."
-    rtk init -g --auto-patch || echo "[WARN] RTK init failed (non-fatal)"
+    echo "[WARN] RTK init failed (non-fatal)"
   fi
 fi
 
