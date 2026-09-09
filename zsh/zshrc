@@ -168,12 +168,18 @@ elif [[ "$IS_MACOS" == 1 ]]; then
   alias ls='ls -G'
 fi
 
-########## Claude Code: second account ##########
+########## Claude Code: extra accounts ##########
 # Claude Code keeps credentials, settings and history in one config dir.
-# Pointing CLAUDE_CONFIG_DIR elsewhere gives a fully isolated second login.
-# bootstrap.sh deploys the same CLAUDE.md / rules / skills into this dir.
-export CLAUDE_ALT_CONFIG_DIR="$HOME/.claude-b"
-alias claude-b='CLAUDE_CONFIG_DIR="$CLAUDE_ALT_CONFIG_DIR" claude'
+# Pointing CLAUDE_CONFIG_DIR elsewhere gives a fully isolated extra login.
+# bootstrap.sh deploys the same CLAUDE.md / rules / skills into these dirs.
+#
+# To add an account: append its suffix here and to CLAUDE_ALT_SUFFIXES in
+# bootstrap.sh. Suffix `b` gives config dir ~/.claude-b and alias `claude-b`.
+CLAUDE_ALT_SUFFIXES=(b c)
+for _claude_suffix in "${CLAUDE_ALT_SUFFIXES[@]}"; do
+  alias "claude-$_claude_suffix"="CLAUDE_CONFIG_DIR=\"\$HOME/.claude-$_claude_suffix\" claude"
+done
+unset _claude_suffix
 
 ########## Local overrides ##########
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local

@@ -426,14 +426,18 @@ CLAUDE_FILES_WITH_UV=(
 )
 
 # Claude Code config directories to deploy into.
-# The first is the default (~/.claude). Extra entries are alternate
-# CLAUDE_CONFIG_DIR targets used for a second account (see zsh/zshrc,
-# alias `claude-b`). Each dir keeps its own login, settings and history,
-# so the shared CLAUDE.md / rules / skills must be deployed into each.
-CLAUDE_CONFIG_DIRS=(
-  "$HOME/.claude"
-  "$HOME/.claude-b"
-)
+# The default ~/.claude plus one alternate CLAUDE_CONFIG_DIR per extra account
+# (see zsh/zshrc, aliases `claude-<suffix>`). Each dir keeps its own login,
+# settings and history, so the shared CLAUDE.md / rules / skills must be
+# deployed into each.
+#
+# To add an account: append its suffix here and to CLAUDE_ALT_SUFFIXES in
+# zsh/zshrc. Suffix `b` gives config dir ~/.claude-b and alias `claude-b`.
+CLAUDE_ALT_SUFFIXES=(b c)
+CLAUDE_CONFIG_DIRS=("$HOME/.claude")
+for claude_suffix in "${CLAUDE_ALT_SUFFIXES[@]}"; do
+  CLAUDE_CONFIG_DIRS+=("$HOME/.claude-$claude_suffix")
+done
 
 # Usage: deploy_claude_files <config_dir>
 deploy_claude_files() {
