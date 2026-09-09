@@ -185,6 +185,19 @@ for _claude_dir in "$HOME"/.claude-account-*(N/); do
 done
 unset _claude_dir _claude_suffix
 
+# The default account has no suffix, so it is normally reached by plain
+# `claude` -- but a shell spawned from an alt-account session inherits that
+# session's CLAUDE_CONFIG_DIR, and plain `claude` then silently lands on the
+# alt account (a `/login` there re-logs the wrong account). `claude-main`
+# always points at the default account.
+#
+# Note it *unsets* the variable rather than pointing it at ~/.claude: the
+# default account keeps its state in $HOME/.claude.json, which is only where
+# claude looks when CLAUDE_CONFIG_DIR is absent. Setting it to ~/.claude makes
+# claude read ~/.claude/.claude.json instead -- a different, empty file -- so
+# the session comes up logged out.
+alias claude-main='env -u CLAUDE_CONFIG_DIR claude'
+
 # Show subscription usage for all logged-in accounts as one table, one row per
 # account. Each account is queried through `claude -p "/usage"`, which spends
 # one session; the account is identified by the email read locally from
@@ -213,7 +226,15 @@ except Exception:
       [[ -n "$email" ]] || continue
       label="$email"
 
-      out="$(CLAUDE_CONFIG_DIR="$dir" claude -p "/usage" 2>/dev/null)"
+      # Query through the same config the account actually lives in: the
+      # default one only resolves with CLAUDE_CONFIG_DIR unset (see the
+      # claude-main alias above), and this shell may have inherited the
+      # variable from an alt-account session.
+      if [[ -z "$suffix" ]]; then
+        out="$(env -u CLAUDE_CONFIG_DIR claude -p "/usage" 2>/dev/null)"
+      else
+        out="$(CLAUDE_CONFIG_DIR="$dir" claude -p "/usage" 2>/dev/null)"
+      fi
       if [[ -z "$out" ]]; then
         printf '%s\t?\t?\t?\t?\tquery failed\n' "$label"
         continue
