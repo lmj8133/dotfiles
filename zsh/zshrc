@@ -173,13 +173,17 @@ fi
 # Pointing CLAUDE_CONFIG_DIR elsewhere gives a fully isolated extra login.
 # bootstrap.sh deploys the same CLAUDE.md / rules / skills into these dirs.
 #
-# To add an account: append its suffix here and to CLAUDE_ALT_SUFFIXES in
-# bootstrap.sh. Suffix `b` gives config dir ~/.claude-b and alias `claude-b`.
-CLAUDE_ALT_SUFFIXES=(b c)
-for _claude_suffix in "${CLAUDE_ALT_SUFFIXES[@]}"; do
-  alias "claude-$_claude_suffix"="CLAUDE_CONFIG_DIR=\"\$HOME/.claude-$_claude_suffix\" claude"
+# Accounts are discovered from disk: every ~/.claude-account-<suffix>/ dir
+# gets an alias `claude-<suffix>`. To add an account just
+# `mkdir ~/.claude-account-<suffix>` and run `claude-<suffix>` once to log in;
+# nothing here needs editing.
+CLAUDE_ALT_SUFFIXES=()
+for _claude_dir in "$HOME"/.claude-account-*(N/); do
+  _claude_suffix="${${_claude_dir:t}#.claude-account-}"
+  CLAUDE_ALT_SUFFIXES+=("$_claude_suffix")
+  alias "claude-$_claude_suffix"="CLAUDE_CONFIG_DIR=\"$_claude_dir\" claude"
 done
-unset _claude_suffix
+unset _claude_dir _claude_suffix
 
 # Show subscription usage for all logged-in accounts as one table, one row per
 # account. Each account is queried through `claude -p "/usage"`, which spends
@@ -189,7 +193,7 @@ claude-usage() {
   {
     printf 'ACCOUNT\tEMAIL\tSESSION(5H)\tSESSION-RESET\tWEEK\tWEEK(MODEL)\tWEEK-RESET\n'
     for suffix in "" "${CLAUDE_ALT_SUFFIXES[@]}"; do
-      dir="$HOME/.claude${suffix:+-$suffix}"
+      dir="$HOME/.claude${suffix:+-account-$suffix}"
       [[ -f "$dir/.credentials.json" ]] || continue
       label="${suffix:-main}"
 
@@ -238,6 +242,8 @@ except Exception:
 }
 
 ########## Local overrides ##########
+# Personal aliases, functions and settings live here. Sourced last, so it can
+# override anything above. Not tracked in git; bootstrap.sh never overwrites it.
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
 
 

@@ -44,8 +44,8 @@ cd /path/to/dotfiles
 - Copies `nvim/init.lua` and `nvim/lua/` to `~/.config/nvim/`
 - Copies `tmux/tmux.conf` to `~/.tmux.conf`
 - Copies `bin/` scripts to `~/.local/bin/`
-- Copies Claude Code configurations from `claude/` to every dir in `CLAUDE_CONFIG_DIRS` (`~/.claude/` plus one `~/.claude-<suffix>/` per extra account; includes CLAUDE.md, commands, skills)
-- Each `~/.claude-<suffix>/` is an isolated config dir for an extra Claude account: run `claude-<suffix>` (alias sets `CLAUDE_CONFIG_DIR`) and log in once with that account. To add an account, append its suffix to `CLAUDE_ALT_SUFFIXES` in both `zsh/zshrc` and `bootstrap.sh`, then re-run `bootstrap.sh`
+- Copies Claude Code configurations from `claude/` to every dir in `CLAUDE_CONFIG_DIRS` (`~/.claude/` plus one `~/.claude-account-<suffix>/` per extra account; includes CLAUDE.md, commands, skills)
+- Each `~/.claude-account-<suffix>/` is an isolated config dir for an extra Claude account: run `claude-<suffix>` (alias sets `CLAUDE_CONFIG_DIR`) and log in once with that account. Aliases are discovered from disk, so to add an account just `mkdir ~/.claude-account-<suffix>`, open a new shell and run `claude-<suffix>` to log in; re-run `bootstrap.sh` to deploy CLAUDE.md/skills into it (bootstrap picks up every existing `~/.claude-account-*/` dir). Edit `CLAUDE_ALT_SUFFIXES` in `bootstrap.sh` only to change the accounts created by default
 - Clones Anthropic official skills repository to `~/.local/share/anthropics-skills/`
 - Installs all Anthropic official skills to `<config dir>/skills/` of every config dir (preserves user customizations)
 - Preserves local overrides (`~/.zshrc.local`, `~/.config/nvim/lua/local.lua`) if they exist
@@ -1397,7 +1397,9 @@ To create your own skill:
 ## Customization
 
 ### Add your own Zsh configurations
-Create `~/.zshrc.local` for personal overrides:
+`~/.zshrc.local` is sourced at the end of `~/.zshrc`. It is created from
+`zsh/zshrc.local` on the first bootstrap run and **never overwritten** after
+that, so your aliases and functions survive re-running `bootstrap.sh`:
 ```bash
 # Example: custom aliases
 echo 'alias ll="ls -lah"' >> ~/.zshrc.local

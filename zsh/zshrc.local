@@ -1,6 +1,21 @@
 # ~/.zshrc.local - Local overrides (not tracked in git)
-# Copy this file to ~/.zshrc.local and uncomment settings as needed.
+#
+# Bootstrap copies this template to ~/.zshrc.local only when the file does not
+# exist yet, so anything you put here survives future `bootstrap.sh` runs.
+# It is sourced at the END of ~/.zshrc, so it can override anything above.
+#
+# Use it for: personal aliases, functions, PATH additions, per-machine env vars.
 
 ########## Disable Vi mode ##########
 # Uncomment the following line to switch back to emacs mode:
 # bindkey -e
+
+########## Custom aliases ##########
+# alias ll='ls -lah'
+# alias gs='git status'
+
+########## Custom functions ##########
+# mkcd() { mkdir -p "$1" && cd "$1"; }
+
+########## PATH additions ##########
+# export PATH="$HOME/bin:$PATH"
