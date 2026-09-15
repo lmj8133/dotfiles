@@ -257,6 +257,7 @@ TMUX_VERSION="3.5a"
 ZSH_VERSION_PIN="5.9"
 LIBEVENT_VERSION="2.1.12-stable"
 NCURSES_VERSION="6.5"
+BYACC_VERSION="20240109"
 
 # ============================
 #  Package Manager Detection
@@ -636,6 +637,19 @@ install_tmux_nosudo() {
 
   (
     set -e
+    export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+
+    # tmux's configure hard-fails without a yacc; build byacc if none is present
+    if ! command -v yacc &>/dev/null && ! command -v bison &>/dev/null && ! command -v byacc &>/dev/null; then
+      echo "[INFO]   Building byacc ${BYACC_VERSION} ..."
+      cd "$tmp_dir"
+      curl -fsSL "https://invisible-island.net/archives/byacc/byacc-${BYACC_VERSION}.tgz" | tar xz
+      cd "byacc-${BYACC_VERSION}"
+      ./configure --prefix="$prefix" >>"$log_file" 2>&1
+      make -j"$(nproc)" >>"$log_file" 2>&1
+      make install >>"$log_file" 2>&1
+    fi
+    export PATH="$prefix/bin:$PATH"
 
     # Build libevent
     echo "[INFO]   Building libevent ${LIBEVENT_VERSION} ..."
@@ -646,13 +660,16 @@ install_tmux_nosudo() {
     make -j"$(nproc)" >>"$log_file" 2>&1
     make install >>"$log_file" 2>&1
 
-    # Build ncurses (if not available)
+    # Build ncurses (if not available). Without .pc files tmux's configure
+    # falls back to a probe that links -lncurses, which a widec-only build
+    # does not provide.
     if ! pkg-config --exists ncurses 2>/dev/null && ! pkg-config --exists ncursesw 2>/dev/null; then
       echo "[INFO]   Building ncurses ${NCURSES_VERSION} ..."
       cd "$tmp_dir"
       curl -fsSL "https://ftp.gnu.org/gnu/ncurses/ncurses-${NCURSES_VERSION}.tar.gz" | tar xz
       cd "ncurses-${NCURSES_VERSION}"
-      ./configure --prefix="$prefix" --with-shared --without-debug --enable-widec >>"$log_file" 2>&1
+      ./configure --prefix="$prefix" --with-shared --without-debug --enable-widec \
+        --enable-pc-files --with-pkg-config-libdir="$prefix/lib/pkgconfig" >>"$log_file" 2>&1
       make -j"$(nproc)" >>"$log_file" 2>&1
       make install >>"$log_file" 2>&1
     fi
@@ -662,8 +679,7 @@ install_tmux_nosudo() {
     cd "$tmp_dir"
     curl -fsSL "https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz" | tar xz
     cd "tmux-${TMUX_VERSION}"
-    PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
-    CFLAGS="-I$prefix/include -I$prefix/include/ncursesw -I$prefix/include/ncurses" \
+    CPPFLAGS="-I$prefix/include" \
     LDFLAGS="-L$prefix/lib -Wl,-rpath,$prefix/lib" \
     ./configure --prefix="$prefix" >>"$log_file" 2>&1
     make -j"$(nproc)" >>"$log_file" 2>&1
@@ -701,13 +717,15 @@ install_zsh_nosudo() {
     set -e
 
     # Build ncurses if not available (shared with tmux)
-    if ! pkg-config --exists ncurses 2>/dev/null && ! pkg-config --exists ncursesw 2>/dev/null; then
+    if ! PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}" pkg-config --exists ncurses 2>/dev/null \
+       && ! PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}" pkg-config --exists ncursesw 2>/dev/null; then
       if [[ ! -f "$prefix/lib/libncursesw.so" && ! -f "$prefix/lib/libncursesw.a" ]]; then
         echo "[INFO]   Building ncurses ${NCURSES_VERSION} ..."
         cd "$tmp_dir"
         curl -fsSL "https://ftp.gnu.org/gnu/ncurses/ncurses-${NCURSES_VERSION}.tar.gz" | tar xz
         cd "ncurses-${NCURSES_VERSION}"
-        ./configure --prefix="$prefix" --with-shared --without-debug --enable-widec >>"$log_file" 2>&1
+        ./configure --prefix="$prefix" --with-shared --without-debug --enable-widec \
+          --enable-pc-files --with-pkg-config-libdir="$prefix/lib/pkgconfig" >>"$log_file" 2>&1
         make -j"$(nproc)" >>"$log_file" 2>&1
         make install >>"$log_file" 2>&1
       fi
