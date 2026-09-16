@@ -171,7 +171,9 @@ fi
 ########## Claude Code: extra accounts ##########
 # Claude Code keeps credentials, settings and history in one config dir.
 # Pointing CLAUDE_CONFIG_DIR elsewhere gives a fully isolated extra login.
-# bootstrap.sh deploys the same CLAUDE.md / rules / skills into these dirs.
+# bootstrap.sh symlinks projects/, skills/, rules/, CLAUDE.md and RTK.md in
+# these dirs to ~/.claude, so all accounts share one set of instructions,
+# skills and conversation transcripts.
 #
 # Accounts are discovered from disk: every ~/.claude-account-<suffix>/ dir
 # gets an alias `claude-<suffix>`. To add an account just
