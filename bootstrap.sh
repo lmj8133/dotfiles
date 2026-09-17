@@ -1485,7 +1485,7 @@ if [[ ${#CLAUDE_SHARE_SKIPPED[@]} -gt 0 ]]; then
   echo
   echo "[WARN] Not shared into ~/.claude (left untouched):"
   printf '[WARN]   %s\n' "${CLAUDE_SHARE_SKIPPED[@]}"
-  echo "[WARN] A populated projects/ needs merging first: ~/claude-share-projects.sh"
+  echo "[WARN] A populated projects/ needs merging first: claude-share --apply"
 fi
 echo
 echo "Remember to:"

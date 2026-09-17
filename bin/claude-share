@@ -1,0 +1,483 @@
+#!/usr/bin/env bash
+# claude-share — migrate existing Claude account dirs onto the shared
+# ~/.claude layout: merge their transcripts into ~/.claude/projects, then
+# symlink projects/, skills/, rules/, CLAUDE.md and RTK.md into each account.
+#
+# bootstrap.sh links these paths for any account dir that is still empty, but
+# refuses one whose projects/ already holds transcripts -- merging them is a
+# one-time, irreversible operation that must not run under a live session.
+# That is this script's job; run it once, then bootstrap.sh takes over.
+#
+# Usage:
+#   claude-share            # dry run: show what would happen
+#   claude-share --apply    # perform the migration
+#   claude-share --revert   # undo, restoring per-account dirs
+#
+# Exit codes: 0 success, 1 aborted (running sessions or a failed check).
+
+set -euo pipefail
+
+SHARED="$HOME/.claude/projects"
+BACKUP_SUFFIX=".pre-share"
+APPLY=0
+REVERT=0
+
+for arg in "$@"; do
+	case "$arg" in
+		--apply)  APPLY=1 ;;
+		--revert) REVERT=1 ;;
+		-h|--help)
+			sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+			exit 0
+			;;
+		*)
+			echo "Unknown argument: $arg" >&2
+			echo "Try --help" >&2
+			exit 1
+			;;
+	esac
+done
+
+log()  { printf '%s\n' "$*"; }
+step() { printf '\n== %s ==\n' "$*"; }
+warn() { printf 'WARNING: %s\n' "$*" >&2; }
+die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+run() {
+	if [ "$APPLY" -eq 1 ] || [ "$REVERT" -eq 1 ]; then
+		"$@"
+	else
+		printf '  [dry-run] %s\n' "$*"
+	fi
+}
+
+# ---------------------------------------------------------------------------
+# Safety check: no Claude Code process may be running.
+#
+# Switching the symlink while a session is live splits that conversation: new
+# messages go to the new location while the old file stops mid-stream, leaving
+# two partial transcripts for one session id.
+# ---------------------------------------------------------------------------
+check_no_running_sessions() {
+	step "Checking for running Claude Code sessions"
+
+	local pids=()
+	local pid
+	while IFS= read -r pid; do
+		[ -n "$pid" ] && pids+=("$pid")
+	done < <(pgrep -u "$(id -u)" -x claude 2>/dev/null || true)
+
+	if [ "${#pids[@]}" -eq 0 ]; then
+		log "  None running. Safe to proceed."
+		return 0
+	fi
+
+	warn "${#pids[@]} Claude Code process(es) still running:"
+	for pid in "${pids[@]}"; do
+		local cfg cwd
+		cfg=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null \
+			| grep '^CLAUDE_CONFIG_DIR=' | cut -d= -f2- || true)
+		cfg=$(basename "${cfg:-$HOME/.claude}")
+		cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null || echo '?')
+		printf '    pid=%-8s account=%-24s cwd=%s\n' "$pid" "$cfg" "$cwd"
+	done
+
+	cat >&2 <<-EOF
+
+	Close every Claude Code session before migrating, including this one.
+	Switching the symlink under a live session splits its transcript in two.
+
+	To stop them all:
+	    pkill -u $(id -u) -x claude
+	EOF
+	return 1
+}
+
+# ---------------------------------------------------------------------------
+# Compare two transcripts by the set of message uuids they contain.
+#
+# A conversation continued under a second account produces two files for one
+# session id: same early messages, one carrying more. Byte comparison only says
+# "different", so it would leave whichever account happened to be processed
+# first -- which may be the shorter one. Prints "src", "dest", or "divergent"
+# when each side holds messages the other lacks.
+# ---------------------------------------------------------------------------
+superset_of() {
+	python3 - "$1" "$2" <<-'PY'
+	import json, sys
+
+	def uuids(path):
+	    out = set()
+	    with open(path, encoding="utf-8", errors="replace") as fh:
+	        for line in fh:
+	            line = line.strip()
+	            if not line:
+	                continue
+	            try:
+	                obj = json.loads(line)
+	            except ValueError:
+	                continue
+	            if isinstance(obj, dict) and obj.get("uuid"):
+	                out.add(obj["uuid"])
+	    return out
+
+	src, dest = uuids(sys.argv[1]), uuids(sys.argv[2])
+	if src == dest:
+	    print("dest")
+	elif src >= dest:
+	    print("src")
+	elif dest >= src:
+	    print("dest")
+	else:
+	    print("divergent")
+	PY
+}
+
+# ---------------------------------------------------------------------------
+# Append a MEMORY.md index's missing entries to the shared copy.
+#
+# MEMORY.md is one line per memory file, so two accounts working the same
+# project hold overlapping but unequal indexes -- neither is a superset. The
+# memory files themselves carry distinct names and merge cleanly; only the
+# index needs reconciling. Entries are keyed by the linked filename so a
+# reworded description does not produce a duplicate line.
+# ---------------------------------------------------------------------------
+# Usage: merge_memory_index <src> <dest> <apply>   (apply 0 counts only)
+merge_memory_index() {
+	python3 - "$1" "$2" "$3" <<-'PY'
+	import re, sys
+
+	def key(line):
+	    m = re.search(r"\]\(([^)]+)\)", line)
+	    return m.group(1) if m else line.strip()
+
+	src, dest, apply_ = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+	with open(dest, encoding="utf-8") as fh:
+	    have = {key(l) for l in fh if l.strip()}
+	with open(src, encoding="utf-8") as fh:
+	    add = [l.rstrip("\n") for l in fh if l.strip() and key(l) not in have]
+	if add and apply_:
+	    with open(dest, "a", encoding="utf-8") as fh:
+	        for line in add:
+	            fh.write(line + "\n")
+	print(len(add))
+	PY
+}
+
+# ---------------------------------------------------------------------------
+# Merge one account's transcripts into the shared directory.
+#
+# Copies rather than moves, so the original stays intact until the operator
+# removes it. Per-project subdirectories are merged; a transcript whose name
+# already exists in the shared directory is reported and skipped, never
+# overwritten.
+# ---------------------------------------------------------------------------
+merge_account() {
+	local acct_projects="$1"
+	local acct_name="$2"
+	local conflicts=0
+
+	# Only top-level transcripts, one directory below projects/. Deeper .jsonl
+	# files are subagent and workflow records living inside a transcript's
+	# sidecar directory; they travel with it, and matching them here would
+	# copy each one a second time as if it were its own conversation.
+	local src
+	while IFS= read -r -d '' src; do
+		local rel dest dest_dir
+		rel="${src#"$acct_projects"/}"
+		dest="$SHARED/$rel"
+		dest_dir=$(dirname "$dest")
+
+		if [ -e "$dest" ]; then
+			if cmp -s "$src" "$dest"; then
+				log "  identical, skipping: $rel"
+			else
+				case "$(superset_of "$src" "$dest")" in
+					src)
+						log "  more complete here, replacing: $rel"
+						run cp -a "$src" "$dest"
+						local sidecar_up="${src%.jsonl}"
+						if [ -d "$sidecar_up" ]; then
+							run rm -rf "$dest_dir/$(basename "$sidecar_up")"
+							run cp -a "$sidecar_up" "$dest_dir/"
+							log "    + sidecar directory"
+						fi
+						;;
+					dest)
+						log "  shared copy is complete, skipping: $rel"
+						;;
+					*)
+						warn "conflict in $acct_name, left in place: $rel"
+						conflicts=$((conflicts + 1))
+						;;
+				esac
+			fi
+			continue
+		fi
+
+		run mkdir -p "$dest_dir"
+		run cp -a "$src" "$dest"
+		log "  merged: $rel"
+
+		# A transcript may own a sidecar directory holding its subagent and
+		# workflow records; it shares the session id, minus the extension.
+		local sidecar="${src%.jsonl}"
+		if [ -d "$sidecar" ]; then
+			run cp -a "$sidecar" "$dest_dir/"
+			log "    + sidecar directory"
+		fi
+	done < <(find "$acct_projects" -mindepth 2 -maxdepth 2 -name '*.jsonl' -type f -print0 2>/dev/null)
+
+	# Project-level memory lives beside the transcripts and is worth carrying
+	# over, but never overwritten: each account may hold a different revision.
+	local mem
+	while IFS= read -r -d '' mem; do
+		local rel dest
+		rel="${mem#"$acct_projects"/}"
+		dest="$SHARED/$rel"
+		if [ -e "$dest" ]; then
+			if ! cmp -s "$mem" "$dest"; then
+				if [ "$(basename "$mem")" = "MEMORY.md" ]; then
+					local added
+					added=$(merge_memory_index "$mem" "$dest" "$APPLY")
+					if [ "$added" -gt 0 ]; then
+						if [ "$APPLY" -eq 1 ]; then
+							log "  merged memory index (+$added): $rel"
+						else
+							log "  [dry-run] would append $added entry(ies) to: $rel"
+						fi
+					fi
+				else
+					warn "memory differs, left in place: $rel"
+				fi
+			fi
+			continue
+		fi
+		run mkdir -p "$(dirname "$dest")"
+		run cp -a "$mem" "$dest"
+		log "  merged memory: $rel"
+	done < <(find "$acct_projects" -path '*/memory/*' -type f -print0 2>/dev/null)
+
+	return "$conflicts"
+}
+
+# ---------------------------------------------------------------------------
+# Give every account the skills, rules and global instructions that currently
+# exist only in ~/.claude.
+#
+# Everything is symlinked, including the two instruction files, so one edit
+# reaches every account. This matches what dotfiles' bootstrap.sh expects to
+# find: it deploys real files only into ~/.claude and treats anything else in
+# an account dir as a path to leave alone, so nothing here gets copied over.
+# ---------------------------------------------------------------------------
+link_shared_assets() {
+	step "Shared skills, rules and instructions"
+
+	local acct
+	for acct in "$HOME"/.claude-account-*/; do
+		acct="${acct%/}"
+		[ -d "$acct" ] || continue
+
+		local name
+		name=$(basename "$acct")
+		log "  $name"
+
+		local dir
+		for dir in skills rules CLAUDE.md RTK.md; do
+			local src="$HOME/.claude/$dir"
+			local dest="$acct/$dir"
+
+			[ -e "$src" ] || continue
+
+			if [ -L "$dest" ]; then
+				if [ "$(readlink -f "$dest")" = "$(readlink -f "$src")" ]; then
+					log "    $dir: already linked"
+				else
+					warn "  $dir points elsewhere: $(readlink "$dest")"
+				fi
+				continue
+			fi
+
+			# An account may be carrying local edits, so an existing real file
+			# or directory is renamed rather than replaced.
+			if [ -e "$dest" ]; then
+				local dest_backup="$dest$BACKUP_SUFFIX"
+				if [ -e "$dest_backup" ]; then
+					warn "  $dir: backup exists, skipping"
+					continue
+				fi
+				log "    $dir: exists already, renaming to $(basename "$dest_backup")"
+				run mv "$dest" "$dest_backup"
+			fi
+
+			run ln -s "$src" "$dest"
+			log "    $dir -> ~/.claude/$dir"
+		done
+	done
+}
+
+migrate() {
+	step "Target"
+	log "  Shared directory: $SHARED"
+	run mkdir -p "$SHARED"
+
+	local total_conflicts=0
+	local acct
+
+	for acct in "$HOME"/.claude-account-*/; do
+		acct="${acct%/}"
+		[ -d "$acct" ] || continue
+
+		local name projects
+		name=$(basename "$acct")
+		projects="$acct/projects"
+
+		step "Account: $name"
+
+		if [ -L "$projects" ]; then
+			local target
+			target=$(readlink -f "$projects")
+			if [ "$target" = "$(readlink -f "$SHARED")" ]; then
+				log "  Already shared. Nothing to do."
+			else
+				warn "Symlink points elsewhere: $target"
+				warn "Leaving it alone; resolve by hand."
+			fi
+			continue
+		fi
+
+		if [ ! -d "$projects" ]; then
+			log "  No projects directory. Creating symlink."
+			run ln -s "$SHARED" "$projects"
+			continue
+		fi
+
+		local count
+		count=$(find "$projects" -mindepth 2 -maxdepth 2 -name '*.jsonl' -type f 2>/dev/null | wc -l)
+		log "  Merging $count transcript(s) into the shared directory"
+
+		local rc=0
+		merge_account "$projects" "$name" || rc=$?
+		total_conflicts=$((total_conflicts + rc))
+
+		local backup="$projects$BACKUP_SUFFIX"
+		if [ -e "$backup" ]; then
+			warn "Backup already exists: $backup"
+			warn "Skipping this account; move the old backup away first."
+			continue
+		fi
+
+		log "  Renaming original to $(basename "$backup")"
+		run mv "$projects" "$backup"
+		log "  Linking projects -> $SHARED"
+		run ln -s "$SHARED" "$projects"
+	done
+
+	link_shared_assets
+
+	step "Summary"
+	if [ "$APPLY" -eq 0 ]; then
+		log "  Dry run. Nothing changed."
+		log "  Re-run with --apply to perform the migration."
+		return 0
+	fi
+
+	log "  Migration complete."
+	if [ "$total_conflicts" -gt 0 ]; then
+		warn "$total_conflicts transcript(s) had name collisions and were skipped."
+		warn "They remain in the *$BACKUP_SUFFIX directories."
+	fi
+
+	cat <<-EOF
+
+	Verify, then clean up:
+	    claude --resume                       # default account lists everything
+	    CLAUDE_CONFIG_DIR=~/.claude-account-mj claude --resume
+
+	Once satisfied, remove the originals:
+	    rm -rf ~/.claude-account-*/projects$BACKUP_SUFFIX
+
+	To undo before then:
+	    $0 --revert
+	EOF
+}
+
+revert() {
+	step "Reverting to per-account directories"
+
+	local acct found=0
+	for acct in "$HOME"/.claude-account-*/; do
+		acct="${acct%/}"
+		[ -d "$acct" ] || continue
+
+		local name projects backup
+		name=$(basename "$acct")
+		projects="$acct/projects"
+		backup="$projects$BACKUP_SUFFIX"
+
+		log "  $name"
+
+		if [ -e "$backup" ]; then
+			found=1
+			if [ -L "$projects" ]; then
+				run rm "$projects"
+			elif [ -e "$projects" ]; then
+				warn "  projects is not a symlink; leaving it alone."
+			fi
+			if [ ! -e "$projects" ] || [ -L "$projects" ]; then
+				run mv "$backup" "$projects"
+				log "    projects restored"
+			fi
+		fi
+
+		# Shared assets: drop the symlink, and restore a renamed original when
+		# one exists. An account that never had its own copy simply loses the
+		# link and goes back to having nothing, which is what it started with.
+		local item
+		for item in skills rules CLAUDE.md RTK.md; do
+			local dest="$acct/$item"
+			local item_backup="$dest$BACKUP_SUFFIX"
+
+			if [ -L "$dest" ]; then
+				found=1
+				run rm "$dest"
+				log "    $item link removed"
+			fi
+
+			if [ -e "$item_backup" ]; then
+				found=1
+				run mv "$item_backup" "$dest"
+				log "    $item restored from backup"
+			fi
+		done
+	done
+
+	if [ "$found" -eq 0 ]; then
+		log "  No backup directories found. Nothing to revert."
+	else
+		log ""
+		log "  Reverted. Transcripts merged into $SHARED remain there;"
+		log "  each account is independent again."
+	fi
+}
+
+# ---------------------------------------------------------------------------
+
+if [ "$REVERT" -eq 1 ]; then
+	check_no_running_sessions || exit 1
+	revert
+	exit 0
+fi
+
+if [ "$APPLY" -eq 1 ]; then
+	check_no_running_sessions || exit 1
+else
+	step "Dry run"
+	log "  No changes will be made. Pass --apply to migrate."
+	if ! check_no_running_sessions; then
+		log ""
+		log "  (A dry run is fine with sessions running; --apply is not.)"
+	fi
+fi
+
+migrate
