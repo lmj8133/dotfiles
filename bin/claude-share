@@ -22,6 +22,12 @@ BACKUP_SUFFIX=".pre-share"
 APPLY=0
 REVERT=0
 
+# Files that could not be merged: a same-named transcript already existed in
+# the shared directory with different content, or a memory file differed.
+# They stay in the *.pre-share backups, so the summary has to name them before
+# the operator deletes those.
+UNMERGED=()
+
 for arg in "$@"; do
 	case "$arg" in
 		--apply)  APPLY=1 ;;
@@ -208,6 +214,7 @@ merge_account() {
 						;;
 					*)
 						warn "conflict in $acct_name, left in place: $rel"
+						UNMERGED+=("$acct_name/projects$BACKUP_SUFFIX/$rel")
 						conflicts=$((conflicts + 1))
 						;;
 				esac
@@ -249,6 +256,7 @@ merge_account() {
 					fi
 				else
 					warn "memory differs, left in place: $rel"
+					UNMERGED+=("$acct_name/projects$BACKUP_SUFFIX/$rel")
 				fi
 			fi
 			continue
@@ -383,9 +391,11 @@ migrate() {
 	fi
 
 	log "  Migration complete."
-	if [ "$total_conflicts" -gt 0 ]; then
-		warn "$total_conflicts transcript(s) had name collisions and were skipped."
-		warn "They remain in the *$BACKUP_SUFFIX directories."
+	if [ ${#UNMERGED[@]} -gt 0 ]; then
+		log ""
+		warn "${#UNMERGED[@]} file(s) could NOT be merged and exist only in the backups."
+		warn "Deleting the backups below destroys these for good -- review them first:"
+		printf 'WARNING:     ~/%s\n' "${UNMERGED[@]}" >&2
 	fi
 
 	cat <<-EOF
@@ -394,7 +404,8 @@ migrate() {
 	    claude --resume                       # default account lists everything
 	    CLAUDE_CONFIG_DIR=~/.claude-account-mj claude --resume
 
-	Once satisfied, remove the originals:
+	Once satisfied, list anything still unmerged, then remove the originals:
+	    find ~/.claude-account-*/projects$BACKUP_SUFFIX -name '*.jsonl'
 	    rm -rf ~/.claude-account-*/projects$BACKUP_SUFFIX
 
 	To undo before then:
@@ -471,13 +482,17 @@ fi
 
 if [ "$APPLY" -eq 1 ]; then
 	check_no_running_sessions || exit 1
-else
-	step "Dry run"
-	log "  No changes will be made. Pass --apply to migrate."
-	if ! check_no_running_sessions; then
-		log ""
-		log "  (A dry run is fine with sessions running; --apply is not.)"
-	fi
+	migrate
+	exit 0
 fi
 
+# Dry run: report the plan first and the blocker last, so the warning sits
+# next to the --apply line it actually blocks rather than scrolling away
+# above several screens of merge output.
+step "Dry run"
+log "  No changes will be made. Pass --apply to migrate."
 migrate
+if ! check_no_running_sessions; then
+	log ""
+	log "  (A dry run is fine with sessions running; --apply is not.)"
+fi
