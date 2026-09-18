@@ -179,10 +179,8 @@ fi
 # gets an alias `claude-<suffix>`. To add an account just
 # `mkdir ~/.claude-account-<suffix>` and run `claude-<suffix>` once to log in;
 # nothing here needs editing.
-CLAUDE_ALT_SUFFIXES=()
 for _claude_dir in "$HOME"/.claude-account-*(N/); do
   _claude_suffix="${${_claude_dir:t}#.claude-account-}"
-  CLAUDE_ALT_SUFFIXES+=("$_claude_suffix")
   alias "claude-$_claude_suffix"="CLAUDE_CONFIG_DIR=\"$_claude_dir\" claude"
 done
 unset _claude_dir _claude_suffix
@@ -200,147 +198,10 @@ unset _claude_dir _claude_suffix
 # the session comes up logged out.
 alias claude-main='env -u CLAUDE_CONFIG_DIR claude'
 
-# Show subscription usage for all logged-in accounts as one table, one row per
-# account. Each account is queried through `claude -p "/usage"`, which spends
-# one session; the account is identified by the email read locally from
-# .claude.json, falling back to the config-dir suffix if that lookup fails.
-# Each reset timestamp is annotated with the remaining time until it fires.
-claude-usage() {
-  local suffix dir label email out
-  {
-    printf 'ACCOUNT\tSESSION(5H)\tSESSION-RESET\tWEEK\tWEEK(MODEL)\tWEEK-RESET\n'
-    for suffix in "" "${CLAUDE_ALT_SUFFIXES[@]}"; do
-      dir="$HOME/.claude${suffix:+-account-$suffix}"
-
-      # `claude.json` sits inside the config dir for alt accounts, but at
-      # $HOME/.claude.json for the default one. Its `oauthAccount` block is
-      # what marks the account as logged in; the credentials themselves live
-      # in the macOS Keychain, so there is no file to probe for.
-      local cfg="$dir/.claude.json"
-      [[ -z "$suffix" ]] && cfg="$HOME/.claude.json"
-      email="$(python3 -c "
-import json,sys
-try:
-    print(json.load(open(sys.argv[1]))['oauthAccount']['emailAddress'])
-except Exception:
-    print('')
-" "$cfg" 2>/dev/null)"
-      [[ -n "$email" ]] || continue
-      label="$email"
-
-      # Query through the same config the account actually lives in: the
-      # default one only resolves with CLAUDE_CONFIG_DIR unset (see the
-      # claude-main alias above), and this shell may have inherited the
-      # variable from an alt-account session.
-      if [[ -z "$suffix" ]]; then
-        out="$(env -u CLAUDE_CONFIG_DIR claude -p "/usage" 2>/dev/null)"
-      else
-        out="$(CLAUDE_CONFIG_DIR="$dir" claude -p "/usage" 2>/dev/null)"
-      fi
-      if [[ -z "$out" ]]; then
-        printf '%s\t?\t?\t?\t?\tquery failed\n' "$label"
-        continue
-      fi
-      print -r -- "$out" | awk -v acct="$label" '
-        /^Current /{
-          line = $0
-          sub(/^Current /, "", line)
-          idx   = index(line, ":")
-          scope = substr(line, 1, idx - 1)
-          rest  = substr(line, idx + 2)
-          used  = rest; sub(/ used.*$/, "", used)
-          reset = rest; sub(/^.*resets /, "", reset)
-          if (scope == "session")                 { sess = used; sreset = reset }
-          else if (scope ~ /all models/)          { week = used; wreset = reset }
-          else if (scope ~ /^week/)               { opus = used
-                                                    mname = scope
-                                                    sub(/^week *\(/, "", mname)
-                                                    sub(/\)$/, "", mname) }
-        }
-        END{
-          # `/usage` only reports for subscription logins; anything else (API
-          # key, logged out) answers without a single "Current ..." line.
-          if (!sess && !week && !opus) {
-            printf "%s\t-\t-\t-\t-\tno usage data\n", acct
-            exit
-          }
-          printf "%s\t%s\t%s\t%s\t%s\t%s\n", acct,
-                 (sess ? sess : "-"), (sreset ? sreset : "-"),
-                 (week ? week : "-"),
-                 (opus ? opus " (" mname ")" : "-"),
-                 (wreset ? wreset : "-")
-        }'
-    done
-  } | python3 -c '
-import re, sys
-from datetime import datetime, timedelta
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    ZoneInfo = None
-
-PAREN = re.compile(r"^(.*) \(([^()]+)\)$")
-
-
-def countdown(stamp, tzname):
-    """Turn a reset stamp + "Asia/Taipei" into a "2h13m" style delta."""
-    tz = None
-    if ZoneInfo is not None:
-        try:
-            tz = ZoneInfo(tzname)
-        except Exception:
-            tz = None
-    now = datetime.now(tz)
-    # /usage drops empty parts: "Sep 15 at 4am", "Sep 9 at 2:49pm", "4:30pm",
-    # "4pm". Older builds wrote "Sep 15, 4am"; accept both spellings.
-    stamp = stamp.replace(" at ", ", ")
-    for fmt in ("%b %d, %I:%M%p", "%b %d, %I%p", "%I:%M%p", "%I%p"):
-        try:
-            # The year is never printed; feed one in so strptime stays happy.
-            when = datetime.strptime("%s %d" % (stamp, now.year), fmt + " %Y")
-        except ValueError:
-            continue
-        dated = "%b" in fmt
-        break
-    else:
-        return None
-    if dated:
-        # Pick the year that lands nearest to now.
-        when = when.replace(tzinfo=now.tzinfo)
-        if when < now - timedelta(days=180):
-            when = when.replace(year=now.year + 1)
-        elif when > now + timedelta(days=180):
-            when = when.replace(year=now.year - 1)
-    else:
-        when = when.replace(year=now.year, month=now.month, day=now.day,
-                            tzinfo=now.tzinfo)
-        if when < now:
-            when += timedelta(days=1)
-    secs = int((when - now).total_seconds())
-    if secs <= 0:
-        return "now"
-    days, rem = divmod(secs, 86400)
-    hours, rem = divmod(rem, 3600)
-    mins = rem // 60
-    if days:
-        return "%dd%dh" % (days, hours)
-    if hours:
-        return "%dh%dm" % (hours, mins)
-    return "%dm" % mins
-
-
-for line in sys.stdin:
-    fields = line.rstrip("\n").split("\t")
-    for i, field in enumerate(fields):
-        m = PAREN.match(field)
-        if not m:
-            continue
-        left = countdown(m.group(1), m.group(2))
-        if left:  # non-timestamp parentheses, e.g. "58% (Fable)", stay as-is
-            fields[i] = m.group(1) + " (" + left + ")"
-    print("\t".join(fields))
-' | column -t -s $'\t'
-}
+# Subscription usage for every logged-in account lives in bin/claude-usage,
+# installed to ~/.local/bin by bootstrap.sh. It queries `claude -p "/usage"`
+# once per account (one session each), caches the result for five minutes and
+# pages through the accounts with the arrow keys.
 
 ########## Local overrides ##########
 # Personal aliases, functions and settings live here. Sourced last, so it can
