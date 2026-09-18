@@ -1,0 +1,8 @@
+# Python
+__pycache__/
+*.py[oc]
+
+# Editor / OS noise
+*.swp
+*.swo
+.DS_Store

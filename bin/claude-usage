@@ -1,0 +1,704 @@
+#!/usr/bin/env python3
+"""claude-usage -- subscription usage for every logged-in Claude account.
+
+Queries `claude -p "/usage"` once per account (each call spends one session),
+renders the result in the style of Claude-Code-Usage-Monitor, and adds a page
+of local token totals read straight from the JSONL transcripts.
+
+Local totals are global, not per-account: bootstrap.sh symlinks every account's
+projects/ onto ~/.claude/projects, so all accounts share one pile of files and
+the records carry no account identity. Official percentages come from /usage and
+stay per-account; the two halves measure different things and are kept apart.
+
+Usage:
+  claude-usage              # interactive pager, arrow keys switch pages
+  claude-usage --print      # print every page and exit
+  claude-usage --refresh    # ignore the cache and re-query (spends sessions)
+  claude-usage --no-cache   # neither read nor write the cache
+"""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import unicodedata
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - stdlib since 3.9
+    ZoneInfo = None
+
+CACHE_PATH = Path.home() / ".cache" / "claude-usage.json"
+CACHE_TTL_SECONDS = 300
+USAGE_TIMEOUT_SECONDS = 120
+
+BAR_WIDTH = 24
+GREEN, YELLOW, RED = "\033[32m", "\033[33m", "\033[31m"
+DIM, BOLD, RESET = "\033[2m", "\033[1m", "\033[0m"
+
+
+# --------------------------------------------------------------------------
+# accounts
+# --------------------------------------------------------------------------
+
+def discover_accounts() -> list[dict]:
+    """Every config dir with an oauth login, default account first."""
+    home = Path.home()
+    dirs = [home / ".claude"] + sorted(home.glob(".claude-account-*"))
+    accounts = []
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        suffix = "" if d.name == ".claude" else d.name[len(".claude-account-"):]
+        # The default account keeps its state in $HOME/.claude.json; alt
+        # accounts keep theirs inside the config dir.
+        cfg = home / ".claude.json" if not suffix else d / ".claude.json"
+        try:
+            oauth = json.loads(cfg.read_text()).get("oauthAccount") or {}
+        except (OSError, ValueError):
+            continue
+        email = oauth.get("emailAddress")
+        if not email:
+            continue
+        accounts.append({
+            "suffix": suffix,
+            "dir": str(d),
+            "email": email,
+            "tier": oauth.get("seatTier") or "",
+            "rate_tier": (oauth.get("userRateLimitTier") or "").replace("default_claude_", ""),
+        })
+    return accounts
+
+
+def query_usage(account: dict) -> str:
+    """Run `/usage` for one account. Costs one session."""
+    env = dict(os.environ)
+    if account["suffix"]:
+        env["CLAUDE_CONFIG_DIR"] = account["dir"]
+    else:
+        # A shell spawned from an alt-account session inherits its
+        # CLAUDE_CONFIG_DIR; plain `claude` would then hit the wrong account.
+        env.pop("CLAUDE_CONFIG_DIR", None)
+    try:
+        # check=False: a failing /usage is reported as an empty row, not raised.
+        proc = subprocess.run(  # noqa: PLW1510
+            ["claude", "-p", "/usage"],
+            env=env, capture_output=True, text=True,
+            timeout=USAGE_TIMEOUT_SECONDS,
+        )
+        return proc.stdout
+    except (subprocess.SubprocessError, OSError):
+        return ""
+
+
+# --------------------------------------------------------------------------
+# parsing /usage
+# --------------------------------------------------------------------------
+
+CURRENT_RE = re.compile(r"^Current\s+([^:]+):\s*(.*)$")
+PCT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+
+
+def parse_usage(text: str) -> dict:
+    """Pull the three `Current ...` lines out of /usage output.
+
+    Shapes seen in the wild:
+        Current session: 58% used, resets 4:30pm
+        Current week (all models): 12% used, resets Sep 15 at 4am
+        Current week (Opus): 79% used, resets Sep 15 at 4am
+    """
+    out: dict = {"session": None, "week": None, "week_model": None, "model_name": ""}
+    for line in text.splitlines():
+        m = CURRENT_RE.match(line.strip())
+        if not m:
+            continue
+        scope, rest = m.group(1).strip().lower(), m.group(2)
+        pm = PCT_RE.search(rest)
+        pct = float(pm.group(1)) if pm else None
+        reset = ""
+        if "resets" in rest:
+            reset = rest.split("resets", 1)[1].strip().rstrip(".")
+        block = {"pct": pct, "reset": reset}
+        if scope == "session":
+            out["session"] = block
+        elif "all models" in scope:
+            out["week"] = block
+        elif scope.startswith("week"):
+            out["week_model"] = block
+            name = scope[len("week"):].strip()
+            out["model_name"] = name.strip("()") or "model"
+    return out
+
+
+def seconds_until(stamp: str, tzname: str) -> int | None:
+    """Seconds from now until a /usage reset stamp, or None if unparsable."""
+    if not stamp:
+        return None
+    tz = None
+    if ZoneInfo is not None:
+        try:
+            tz = ZoneInfo(tzname)
+        except Exception:  # noqa: BLE001 - any bad tz name falls back to local
+            tz = None
+    now = datetime.now(tz)
+    # A trailing "(UTC)" means the stamp is zoned, not local wall time.
+    stamp_tz = None
+    zoned = re.search(r"\(([A-Za-z/_+-]+)\)\s*$", stamp)
+    if zoned:
+        stamp = stamp[: zoned.start()].strip()
+        name = zoned.group(1)
+        if ZoneInfo is not None:
+            try:
+                stamp_tz = ZoneInfo("UTC" if name.upper() == "UTC" else name)
+            except Exception:  # noqa: BLE001 - unknown zone falls back to local
+                stamp_tz = None
+    # /usage drops empty parts: "Sep 15 at 4am", "Sep 9 at 2:49pm", "4:30pm",
+    # "4pm". Older builds wrote "Sep 15, 4am"; accept both spellings.
+    cleaned = stamp.replace(" at ", ", ")
+    when = None
+    dated = False
+    for fmt in ("%b %d, %I:%M%p", "%b %d, %I%p", "%I:%M%p", "%I%p"):
+        try:
+            # The year is never printed; feed one in so strptime stays happy.
+            # Naive by design: /usage prints no zone, so the stamp is local
+            # wall time and gets now's tzinfo attached below.
+            when = datetime.strptime(f"{cleaned} {now.year}", fmt + " %Y")  # noqa: DTZ007
+        except ValueError:
+            continue
+        dated = "%b" in fmt
+        break
+    if when is None:
+        return None
+    zone = stamp_tz or now.tzinfo
+    if dated:
+        when = when.replace(tzinfo=zone)
+        if when < now - timedelta(days=180):
+            when = when.replace(year=now.year + 1)
+        elif when > now + timedelta(days=180):
+            when = when.replace(year=now.year - 1)
+    else:
+        # An undated stamp is a wall clock in `zone`; anchor it to today there.
+        today = now.astimezone(zone)
+        when = when.replace(year=today.year, month=today.month, day=today.day,
+                            tzinfo=zone)
+        if when < now:
+            when += timedelta(days=1)
+    return max(0, int((when - now).total_seconds()))
+
+
+def countdown(stamp: str, tzname: str) -> str:
+    """Turn a /usage reset stamp into a "2h13m" style delta."""
+    secs = seconds_until(stamp, tzname)
+    if secs is None:
+        return ""
+    if secs <= 0:
+        return "now"
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    mins = rem // 60
+    if days:
+        return f"{days}d{hours:02d}h"
+    if hours:
+        return f"{hours}h{mins:02d}m"
+    return f"{mins}m"
+
+
+# --------------------------------------------------------------------------
+# local tokens
+# --------------------------------------------------------------------------
+
+# USD per million tokens, per model family. Cache create is input * 1.25
+# (5-minute TTL), cache read is input * 0.1. A family absent here is priced at
+# zero rather than guessed, so an unknown model never inflates the total.
+MODEL_PRICING = {
+    "opus": {"input": 5.0, "output": 25.0, "cache_w": 6.25, "cache_r": 0.5},
+    "fable": {"input": 10.0, "output": 50.0, "cache_w": 12.5, "cache_r": 1.0},
+    "sonnet": {"input": 3.0, "output": 15.0, "cache_w": 3.75, "cache_r": 0.3},
+    "haiku": {"input": 1.0, "output": 5.0, "cache_w": 1.25, "cache_r": 0.1},
+}
+
+
+def price_for(model: str) -> dict | None:
+    low = (model or "").lower()
+    for family, table in MODEL_PRICING.items():
+        if family in low:
+            return table
+    return None
+
+
+def entry_cost(vals: dict, pricing: dict | None) -> float:
+    if not pricing:
+        return 0.0
+    return sum(vals[k] / 1e6 * pricing[k] for k in
+               ("input", "output", "cache_w", "cache_r"))
+
+
+def scan_local_tokens(projects_dir: Path) -> dict:
+    """Sum tokens across every transcript. ~0.4s for 140MB.
+
+    Deduped on (message id, requestId) the way claude-monitor does, since a
+    record can appear in more than one transcript.
+    """
+    now = datetime.now(timezone.utc)
+    cut5, cut7 = now - timedelta(hours=5), now - timedelta(days=7)
+    seen: set[str] = set()
+    totals = {k: 0 for k in ("input", "output", "cache_w", "cache_r")}
+    win5 = dict(totals)
+    win7 = dict(totals)
+    models: dict[str, int] = {}
+    cost_total = cost_5h = cost_7d = 0.0
+    messages = messages_5h = messages_7d = 0
+    started = time.time()
+    files = list(projects_dir.rglob("*.jsonl")) if projects_dir.is_dir() else []
+
+    for path in files:
+        try:
+            with path.open(errors="replace") as fh:
+                for line in fh:
+                    if '"usage"' not in line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except ValueError:
+                        continue
+                    if not isinstance(rec, dict):
+                        continue
+                    msg = rec.get("message")
+                    if not isinstance(msg, dict):
+                        continue
+                    usage = msg.get("usage")
+                    if not isinstance(usage, dict):
+                        continue
+                    mid, rid = msg.get("id"), rec.get("requestId")
+                    if mid and rid:
+                        key = f"{mid}:{rid}"
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                    vals = {
+                        "input": usage.get("input_tokens") or 0,
+                        "output": usage.get("output_tokens") or 0,
+                        "cache_w": usage.get("cache_creation_input_tokens") or 0,
+                        "cache_r": usage.get("cache_read_input_tokens") or 0,
+                    }
+                    for k, v in vals.items():
+                        totals[k] += v
+                    # Model share uses input+output only: cache reads dwarf
+                    # everything else and would flatten the distribution.
+                    models[msg.get("model") or "unknown"] = (
+                        models.get(msg.get("model") or "unknown", 0)
+                        + vals["input"] + vals["output"]
+                    )
+                    cost = entry_cost(vals, price_for(msg.get("model") or ""))
+                    cost_total += cost
+                    messages += 1
+                    when = _parse_ts(rec.get("timestamp"))
+                    if when is None:
+                        continue
+                    if when >= cut5:
+                        for k, v in vals.items():
+                            win5[k] += v
+                        cost_5h += cost
+                        messages_5h += 1
+                    if when >= cut7:
+                        for k, v in vals.items():
+                            win7[k] += v
+                        cost_7d += cost
+                        messages_7d += 1
+        except OSError:
+            continue
+
+    def billable(d):
+        return d["input"] + d["output"] + d["cache_w"]
+    return {
+        "totals": totals, "win5": win5, "win7": win7,
+        "billable_total": billable(totals),
+        "billable_5h": billable(win5),
+        "billable_7d": billable(win7),
+        "burn_rate": billable(win5) / 300.0,
+        "cost_total": cost_total,
+        "cost_5h": cost_5h,
+        "cost_7d": cost_7d,
+        "cost_rate": cost_5h / 300.0,
+        "messages": messages,
+        "messages_5h": messages_5h,
+        "messages_7d": messages_7d,
+        "models": models,
+        "files": len(files),
+        "records": len(seen),
+        "scan_seconds": round(time.time() - started, 2),
+    }
+
+
+def _parse_ts(value) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        text = value.replace("Z", "+00:00") if value.endswith("Z") else value
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+# --------------------------------------------------------------------------
+# rendering
+# --------------------------------------------------------------------------
+
+def display_width(text: str) -> int:
+    """Terminal cells, counting CJK and emoji as two.
+
+    Variation selectors and combining marks occupy no cell of their own but
+    report width "N", so they are skipped rather than counted as one.
+    """
+    plain = re.sub(r"\033\[[0-9;]*m", "", text)
+    total = 0
+    for ch in plain:
+        if unicodedata.combining(ch) or ch == "️":
+            continue
+        total += 2 if unicodedata.east_asian_width(ch) in "WF" else 1
+    return total
+
+
+def pad(text: str, width: int) -> str:
+    return text + " " * max(0, width - display_width(text))
+
+
+def bar(pct: float | None, width: int = BAR_WIDTH, color: bool = True) -> str:
+    """A monitor-style progress bar. Same fill formula, same characters."""
+    if pct is None:
+        return DIM + "░" * width + RESET if color else "░" * width
+    filled = int(width * max(0.0, min(pct, 100.0)) / 100.0)
+    body = "█" * filled + "░" * (width - filled)
+    if not color:
+        return body
+    # One threshold drives both bar and lamp, unlike monitor, which feeds a
+    # percentage to a dollar-denominated palette and paints every bar red.
+    tone = GREEN if pct < 50 else (YELLOW if pct < 80 else RED)
+    return tone + body + RESET
+
+
+def lamp(pct: float | None) -> str:
+    if pct is None:
+        return "⚪"
+    return "🟢" if pct < 50 else ("🟡" if pct < 80 else "🔴")
+
+
+def abbrev(n: float) -> str:
+    for limit, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if abs(n) >= limit:
+            text = f"{n / limit:.2f}"
+            # Trim a trailing ".00" only, so 27.99M does not become 28M.
+            return (text.removesuffix(".00")) + suffix
+    return f"{int(n)}"
+
+
+def metric_row(icon: str, label: str, pct: float | None, note: str = "",
+               color: bool = True) -> str:
+    left = pad(f"{icon} {label}:", 20)
+    pct_s = f"{pct:5.1f}%" if pct is not None else "    --"
+    row = f"  {left}{lamp(pct)} [{bar(pct, color=color)}] {pct_s}"
+    return f"{row}   {DIM}{note}{RESET}" if note and color else (
+        f"{row}   {note}" if note else row)
+
+
+def model_bar(models: dict[str, int], width: int = BAR_WIDTH) -> tuple[str, str]:
+    """Largest-remainder split so segments always total `width`."""
+    total = sum(models.values())
+    if not total:
+        return "░" * width, ""
+    families: dict[str, int] = {}
+    for name, value in models.items():
+        low = name.lower()
+        if "opus" in low:
+            fam = "Opus"
+        elif "fable" in low:
+            fam = "Fable"
+        elif "sonnet" in low:
+            fam = "Sonnet"
+        elif "haiku" in low:
+            fam = "Haiku"
+        else:
+            fam = "Other"
+        families[fam] = families.get(fam, 0) + value
+    order = [f for f in ("Opus", "Fable", "Sonnet", "Haiku", "Other") if families.get(f)]
+    exact = {f: width * families[f] / total for f in order}
+    filled = {f: int(v) for f, v in exact.items()}
+    for f in sorted(order, key=lambda f: exact[f] - filled[f], reverse=True)[
+            : width - sum(filled.values())]:
+        filled[f] += 1
+    glyphs = {"Opus": "█", "Fable": "▓", "Sonnet": "▒", "Haiku": "▪", "Other": "·"}
+    segments = "".join(glyphs[f] * filled[f] for f in order)
+    legend = " | ".join(f"{f} {100 * families[f] / total:.0f}%" for f in order[:3])
+    return segments, legend
+
+
+def term_width(default: int = 78) -> int:
+    try:
+        return max(60, min(os.get_terminal_size().columns, 100))
+    except OSError:
+        return default
+
+
+def render_account_page(acct: dict, parsed: dict, tzname: str,
+                        color: bool = True) -> list[str]:
+    width = term_width()
+    lines: list[str] = []
+    head = f"{acct['email']}"
+    tier = " · ".join(x for x in (acct.get("tier"), acct.get("rate_tier")) if x)
+    lines.append("")
+    lines.append(f"  {BOLD if color else ''}{head}{RESET if color else ''}"
+                 f"{' ' * max(1, width - 4 - display_width(head) - display_width(tier))}"
+                 f"{DIM if color else ''}{tier}{RESET if color else ''}")
+    lines.append("")
+
+    if parsed is None:
+        lines.append(f"  {RED if color else ''}Query failed -- no response from /usage{RESET if color else ''}")
+        lines.append("")
+        return lines
+    if not any((parsed["session"], parsed["week"], parsed["week_model"])):
+        # /usage only reports for subscription logins; an API key or a logged
+        # out account answers without a single "Current ..." line.
+        lines.append(f"  {DIM if color else ''}No subscription usage "
+                     f"(API key or logged out){RESET if color else ''}")
+        lines.append("")
+        return lines
+
+    sess, week, wmodel = parsed["session"], parsed["week"], parsed["week_model"]
+    lines.append(metric_row("⏳", "Session (5h)", sess["pct"] if sess else None, color=color))
+    lines.append(metric_row("📅", "Week (all)", week["pct"] if week else None, color=color))
+    if wmodel:
+        label = f"Week ({parsed['model_name']})"[:14]
+        lines.append(metric_row("🧠", label, wmodel["pct"], color=color))
+    lines.append("")
+
+    # /usage reports when a window resets but not when it opened, so the bar
+    # assumes a fixed window length and shows how much of it has elapsed.
+    for icon, label, block, window in (("⏱️", "Time to Reset", sess, 5 * 3600),
+                                       ("🗓️", "Week Reset", week, 7 * 86400)):
+        if not block or not block["reset"]:
+            continue
+        left = seconds_until(block["reset"], tzname)
+        if left is None:
+            lines.append(f"  {pad(f'{icon} {label}:', 20)}{block['reset']}")
+            continue
+        elapsed_pct = 100.0 * (window - min(left, window)) / window
+        lines.append(f"  {pad(f'{icon} {label}:', 20)}{lamp(elapsed_pct)} "
+                     f"[{bar(elapsed_pct, color=color)}] "
+                     f"{countdown(block['reset'], tzname)}")
+    lines.append("")
+    return lines
+
+
+def render_local_page(local: dict, color: bool = True) -> list[str]:
+    width = term_width()
+    t = local["totals"]
+    heading = (f"  {BOLD if color else ''}LOCAL TOKENS{RESET if color else ''}"
+               f"{' ' * max(1, width - 40)}"
+               f"{DIM if color else ''}all accounts{RESET if color else ''}")
+    lines = ["", heading, ""]
+
+    # A subscription seat is not billed per token; this is what the same usage
+    # would cost at API list price -- a sense of size, not an invoice.
+    lines.append(f"  {pad('💰 Total Cost:', 20)}${local['cost_total']:,.2f}"
+                 f"   {DIM if color else ''}at API list price{RESET if color else ''}")
+    lines.append(f"  {pad('📊 Total Tokens:', 20)}{abbrev(local['billable_total'])}")
+    lines.append(f"  {pad('📨 Messages:', 20)}{local['messages']:,}")
+    lines.append("")
+
+    segments, legend = model_bar(local["models"])
+    lines.append(f"  {pad('🤖 Models:', 20)}[{segments}] {legend}")
+    lines.append("")
+    lines.append(f"  {DIM if color else ''}in {abbrev(t['input'])} · "
+                 f"out {abbrev(t['output'])} · cache-w {abbrev(t['cache_w'])}"
+                 f"{' ' * 6}cache-r {abbrev(t['cache_r'])} (unpriced){RESET if color else ''}")
+    lines.append("")
+    lines.append(f"  {DIM if color else ''}{local["files"]} files · "
+                 f"{local['records']:,} records · {local['scan_seconds']}s{RESET if color else ''}")
+    lines.append("")
+    return lines
+
+
+def render_frame(snapshot: dict, page: int, color: bool = True) -> str:
+    width = term_width()
+    accounts = snapshot["accounts"]
+    pages = len(accounts) + 1
+    page = max(0, min(page, pages - 1))
+
+    tabs = []
+    for i, a in enumerate(accounts):
+        name = a["email"].split("@")[0]
+        tabs.append(f"[{i + 1}] {name}" if i == page else f" {i + 1}  {name}")
+    tabs.append("[L] local" if page == len(accounts) else " L  local")
+
+    age = int(time.time() - snapshot["captured_at"])
+    age_s = "just now" if age < 60 else f"{age // 60}m ago"
+
+    out = [
+        (BOLD if color else "") + "✦ ✧ ✦ ✧  CLAUDE USAGE  ✦ ✧ ✦ ✧" + (RESET if color else ""),
+        "═" * width,
+        "  " + "   ".join(tabs),
+        "═" * width,
+    ]
+    if page < len(accounts):
+        a = accounts[page]
+        out += render_account_page(a, snapshot["usage"].get(a["email"]),
+                                   snapshot["timezone"], color=color)
+    else:
+        out += render_local_page(snapshot["local"], color=color)
+    out.append("═" * width)
+    hint = "←/→ switch page   r refresh (spends sessions)   q quit"
+    out.append(f"  {hint}{' ' * max(2, width - 6 - display_width(hint) - 22)}"
+               f"{DIM if color else ''}queried {snapshot["captured_label"]} · {age_s}{RESET if color else ''}")
+    out.append("═" * width)
+    return "\n".join(out)
+
+
+# --------------------------------------------------------------------------
+# snapshot + cache
+# --------------------------------------------------------------------------
+
+def build_snapshot(tzname: str) -> dict:
+    accounts = discover_accounts()
+    if not accounts:
+        raise SystemExit("No logged-in Claude account found")
+
+    # One /usage per account, fired concurrently: serial would multiply the
+    # wait by the account count, and each call takes several seconds.
+    usage: dict = {}
+    print(f"Querying /usage for {len(accounts)} accounts "
+          "(one session each)...",
+          file=sys.stderr)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(accounts)) as pool:
+        futures = {pool.submit(query_usage, a): a for a in accounts}
+        for fut in concurrent.futures.as_completed(futures):
+            acct = futures[fut]
+            text = fut.result()
+            usage[acct["email"]] = parse_usage(text) if text.strip() else None
+            print(f"  {acct['email']} done", file=sys.stderr)
+
+    local = scan_local_tokens(Path.home() / ".claude" / "projects")
+    now = datetime.now(ZoneInfo(tzname) if ZoneInfo else None)
+    return {
+        "captured_at": time.time(),
+        "captured_label": now.strftime("%H:%M"),
+        "timezone": tzname,
+        "accounts": accounts,
+        "usage": usage,
+        "local": local,
+    }
+
+
+def load_cache(tzname: str) -> dict | None:
+    try:
+        data = json.loads(CACHE_PATH.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or "captured_at" not in data:
+        return None
+    if time.time() - data["captured_at"] > CACHE_TTL_SECONDS:
+        return None
+    return data
+
+
+def save_cache(snapshot: dict) -> None:
+    try:
+        CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = CACHE_PATH.with_suffix(f".{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(snapshot))
+        os.replace(tmp, CACHE_PATH)
+    except OSError:
+        pass  # a cache write failure must never break the display
+
+
+# --------------------------------------------------------------------------
+# interactive pager
+# --------------------------------------------------------------------------
+
+def run_pager(snapshot: dict, tzname: str) -> None:
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    page, pages = 0, len(snapshot["accounts"]) + 1
+    try:
+        tty.setcbreak(fd)
+        while True:
+            sys.stdout.write("\033[2J\033[H")
+            sys.stdout.write(render_frame(snapshot, page))
+            sys.stdout.flush()
+            ch = sys.stdin.read(1)
+            if ch in ("q", "\x03"):
+                break
+            if ch == "\033":  # arrow keys arrive as ESC [ C / ESC [ D
+                if sys.stdin.read(1) == "[":
+                    arrow = sys.stdin.read(1)
+                    if arrow == "C":
+                        page = (page + 1) % pages
+                    elif arrow == "D":
+                        page = (page - 1) % pages
+            elif ch in ("l", "L"):
+                page = pages - 1
+            elif ch.isdigit() and 1 <= int(ch) <= len(snapshot["accounts"]):
+                page = int(ch) - 1
+            elif ch == "r":
+                termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+                sys.stdout.write("\033[2J\033[H")
+                sys.stdout.flush()
+                snapshot = build_snapshot(tzname)
+                save_cache(snapshot)
+                tty.setcbreak(fd)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+        sys.stdout.write("\033[2J\033[H")
+        sys.stdout.flush()
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        prog="claude-usage",
+        description="Subscription usage for every logged-in Claude account.",
+        epilog="example: claude-usage --print",
+    )
+    ap.add_argument("--print", dest="print_mode", action="store_true",
+                    help="print every page and exit instead of paging")
+    ap.add_argument("--refresh", action="store_true",
+                    help="ignore the cache and re-query (spends one session per account)")
+    ap.add_argument("--no-cache", dest="no_cache", action="store_true",
+                    help="neither read nor write the cache")
+    ap.add_argument("--timezone", default=os.environ.get("TZ") or "Asia/Taipei",
+                    help="timezone for reset countdowns (default: %(default)s)")
+    args = ap.parse_args()
+
+    snapshot = None
+    if not args.refresh and not args.no_cache:
+        snapshot = load_cache(args.timezone)
+    if snapshot is None:
+        snapshot = build_snapshot(args.timezone)
+        if not args.no_cache:
+            save_cache(snapshot)
+
+    if args.print_mode or not sys.stdout.isatty() or not sys.stdin.isatty():
+        color = sys.stdout.isatty()
+        pages = len(snapshot["accounts"]) + 1
+        for page in range(pages):
+            print(render_frame(snapshot, page, color=color))
+            if page < pages - 1:
+                print()
+        return 0
+
+    run_pager(snapshot, args.timezone)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
