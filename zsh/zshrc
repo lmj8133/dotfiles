@@ -184,6 +184,11 @@ for _claude_dir in "$HOME"/.claude-account-*(N/); do
   _claude_suffix="${${_claude_dir:t}#.claude-account-}"
   CLAUDE_ALT_SUFFIXES+=("$_claude_suffix")
   alias "claude-$_claude_suffix"="CLAUDE_CONFIG_DIR=\"$_claude_dir\" claude"
+  # bootstrap.sh sets disableRemoteControl in every alt account so a resume
+  # there never takes over a main-account conversation's Remote Control
+  # session. `claude-<suffix>-rc` lifts that for one invocation when an alt
+  # account is wanted remotely on purpose; add --remote-control or -r as usual.
+  alias "claude-$_claude_suffix-rc"="CLAUDE_CONFIG_DIR=\"$_claude_dir\" claude --settings '{\"disableRemoteControl\":false}'"
 done
 unset _claude_dir _claude_suffix
 

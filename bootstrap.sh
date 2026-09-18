@@ -1151,6 +1151,38 @@ else
   echo "[WARN] ./templates/clangd not found, skip template installation"
 fi
 
+# Keep Remote Control off in an alt account's settings.json.
+#
+# Remote Control binds a conversation to the account that registered it, via a
+# bridge-session record in the (shared) transcript. Resuming a conversation
+# reconnects from that record regardless of remoteControlAtStartup, so an alt
+# account resuming a main-account conversation would register its own remote
+# session and rewrite the record; the main account then can no longer reach
+# the original remote session and the phone-side history is gone. With
+# disableRemoteControl the alt account's resume leaves the record alone and
+# the main account reconnects to the same remote session (verified 2026-09-18).
+# The `claude-<suffix>-rc` alias in zshrc overrides this per invocation for
+# the rare case an alt account is wanted remotely. Merges into the existing
+# file so per-account model, theme and hooks survive; jq is required, as for
+# the pdf_snip merge below.
+#
+# Usage: disable_remote_control <config_dir>
+disable_remote_control() {
+  local settings="$1/settings.json"
+  if ! command -v jq &>/dev/null; then
+    echo "[WARN] jq is not installed — cannot set disableRemoteControl in $settings"
+    return 0
+  fi
+  [[ -f "$settings" ]] || echo "{}" > "$settings"
+  if jq '.disableRemoteControl = true' "$settings" > "$settings.tmp" \
+    && mv "$settings.tmp" "$settings"; then
+    echo "[INFO] Set disableRemoteControl in $settings"
+  else
+    rm -f "$settings.tmp"
+    echo "[WARN] Failed to set disableRemoteControl in $settings (jq error or write permission?)"
+  fi
+}
+
 # ============================
 #  Claude Code config
 # ============================
@@ -1172,6 +1204,7 @@ else
     [[ "$claude_config_dir" == "$HOME/.claude" ]] && continue
     echo "[INFO] Linking shared Claude paths -> $claude_config_dir"
     link_shared_claude_paths "$claude_config_dir"
+    disable_remote_control "$claude_config_dir"
   done
 fi
 
