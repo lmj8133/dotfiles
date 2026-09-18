@@ -415,7 +415,11 @@ strip_uv_sentinels() {
         -e '/<!-- UV_FREE_START -->/,/<!-- UV_FREE_END -->/d' \
         "$file" > "$tmp"
   fi
-  mv "$tmp" "$file"
+  # Write through the path rather than `mv` onto it: alt account dirs reach the
+  # shared CLAUDE.md / rules via symlink, and mv would replace the link with a
+  # divergent copy, silently un-sharing the file on every run.
+  cat "$tmp" > "$file"
+  rm -f "$tmp"
 }
 
 CLAUDE_FILES_WITH_UV=(
@@ -426,11 +430,21 @@ CLAUDE_FILES_WITH_UV=(
   "claude/skills/review/references/checklists.md"
 )
 
-# Claude Code config directories to deploy into.
+# Account-agnostic paths: one copy in ~/.claude, symlinked into every alt
+# account dir. projects/ is here so any account can `--resume` any
+# conversation; the rest just avoids duplicating ~12 MB of skills per account.
+# Everything absent from this list stays per-account (.credentials.json,
+# .claude.json, settings.json, history.jsonl, sessions/, policy-limits.json).
+CLAUDE_SHARED_PATHS=(projects skills rules CLAUDE.md RTK.md)
+
+# Paths link_shared_claude_paths() declined to touch, reported once at the end.
+CLAUDE_SHARE_SKIPPED=()
+
+# Claude Code config directories.
 # The default ~/.claude plus one alternate CLAUDE_CONFIG_DIR per extra account
-# (see zsh/zshrc, aliases `claude-<suffix>`). Each dir keeps its own login,
-# settings and history, so the shared CLAUDE.md / rules / skills must be
-# deployed into each.
+# (see zsh/zshrc, aliases `claude-<suffix>`). Only ~/.claude is a copy target;
+# alt dirs receive symlinks for CLAUDE_SHARED_PATHS and keep their own login,
+# settings and history.
 #
 # Alt accounts are discovered from disk, never created here: deploying into a
 # dir also creates it, and an empty ~/.claude-account-<suffix>/ is not free --
@@ -460,6 +474,41 @@ deploy_claude_files() {
       strip_uv_sentinels "$dest"
       echo "[INFO]   Processed: $dest"
     fi
+  done
+}
+
+# Point an alt account dir's account-agnostic paths at ~/.claude.
+# Refuses rather than replaces: a real projects/ dir holds transcripts, and
+# swapping it for a link while that account has a session open splits the
+# conversation into two partial files. rmdir does the enforcing -- it fails on
+# a non-empty dir, so "has content" is decided by the kernel, not by a test.
+# Usage: link_shared_claude_paths <config_dir>
+link_shared_claude_paths() {
+  local config_dir="$1"
+  local entry src dst
+  for entry in "${CLAUDE_SHARED_PATHS[@]}"; do
+    src="$HOME/.claude/$entry"
+    dst="$config_dir/$entry"
+    # A dangling link would turn a later `mkdir -p` into a fatal "File exists",
+    # so never create one: skip until ~/.claude has the entry.
+    [[ -e "$src" ]] || continue
+    if [[ -L "$dst" ]]; then
+      if [[ "$(readlink "$dst")" != "$src" ]]; then
+        CLAUDE_SHARE_SKIPPED+=("$dst (symlink to somewhere else)")
+      fi
+      continue
+    fi
+    if [[ -d "$dst" ]]; then
+      rmdir "$dst" 2>/dev/null || {
+        CLAUDE_SHARE_SKIPPED+=("$dst (real directory with content)")
+        continue
+      }
+    elif [[ -e "$dst" ]]; then
+      CLAUDE_SHARE_SKIPPED+=("$dst (real file)")
+      continue
+    fi
+    ln -s "$src" "$dst"
+    echo "[INFO]   Linked $dst -> $src"
   done
 }
 
@@ -1102,12 +1151,62 @@ else
   echo "[WARN] ./templates/clangd not found, skip template installation"
 fi
 
+# Keep Remote Control off in an alt account's settings.json.
+#
+# Remote Control binds a conversation to the account that registered it, via a
+# bridge-session record in the (shared) transcript. Resuming a conversation
+# reconnects from that record regardless of remoteControlAtStartup, so an alt
+# account resuming a main-account conversation would register its own remote
+# session and rewrite the record; the main account then can no longer reach
+# the original remote session and the phone-side history is gone. With
+# disableRemoteControl the alt account's resume leaves the record alone and
+# the main account reconnects to the same remote session (verified 2026-09-18).
+# The `claude-<suffix>-rc` alias in zshrc overrides this per invocation for
+# the rare case an alt account is wanted remotely. Merges into the existing
+# file so per-account model, theme and hooks survive; jq is required, as for
+# the pdf_snip merge below.
+#
+# Usage: disable_remote_control <config_dir>
+disable_remote_control() {
+  local settings="$1/settings.json"
+  if ! command -v jq &>/dev/null; then
+    echo "[WARN] jq is not installed — cannot set disableRemoteControl in $settings"
+    return 0
+  fi
+  [[ -f "$settings" ]] || echo "{}" > "$settings"
+  if jq '.disableRemoteControl = true' "$settings" > "$settings.tmp" \
+    && mv "$settings.tmp" "$settings"; then
+    echo "[INFO] Set disableRemoteControl in $settings"
+  else
+    rm -f "$settings.tmp"
+    echo "[WARN] Failed to set disableRemoteControl in $settings (jq error or write permission?)"
+  fi
+}
+
 # ============================
 #  Claude Code config
 # ============================
-for claude_config_dir in "${CLAUDE_CONFIG_DIRS[@]}"; do
-  deploy_claude_files "$claude_config_dir"
-done
+# Relinking an account dir while that account has a session open splits the
+# live conversation across two transcript files, so refuse up front. Scope the
+# match: a bare `pgrep -f claude` also matches other users on a shared box and
+# would make this refuse forever. `|| true` keeps pgrep's no-match exit 1 from
+# tripping `set -e` -- that is the case where it is safe to proceed.
+claude_running="$(pgrep -u "$(id -u)" -x claude | wc -l || true)"
+if [[ "$claude_running" -gt 0 ]]; then
+  echo "[WARN] $claude_running claude process(es) running; skipping Claude config deployment."
+  echo "[WARN] Close them and re-run, or shared paths may be relinked under a live session."
+else
+  # Only ~/.claude is a copy target. Copying into an alt dir would fail on the
+  # symlinked skills/ and rules/ (fatal under `set -e`) and would follow the
+  # symlinked CLAUDE.md to overwrite the shared original in place.
+  deploy_claude_files "$HOME/.claude"
+  for claude_config_dir in "${CLAUDE_CONFIG_DIRS[@]}"; do
+    [[ "$claude_config_dir" == "$HOME/.claude" ]] && continue
+    echo "[INFO] Linking shared Claude paths -> $claude_config_dir"
+    link_shared_claude_paths "$claude_config_dir"
+    disable_remote_control "$claude_config_dir"
+  done
+fi
 
 # ============================
 #  Anthropic Skills Repository
@@ -1124,11 +1223,9 @@ cd "$HOME/.local/share"
 clone_if_missing "https://github.com/anthropics/skills.git" "anthropics-skills"
 cd - > /dev/null
 
-# Copy official skills into every Claude config dir (preserve user customizations)
+# Install official skills once: every account dir's skills/ resolves here.
 if [[ -d "$ANTHROPICS_SKILLS_DIR/skills" ]]; then
-  for claude_config_dir in "${CLAUDE_CONFIG_DIRS[@]}"; do
-    install_official_skills "$ANTHROPICS_SKILLS_DIR/skills" "$claude_config_dir"
-  done
+  install_official_skills "$ANTHROPICS_SKILLS_DIR/skills" "$HOME/.claude"
 else
   echo "[WARN] Anthropic skills repository not found at $ANTHROPICS_SKILLS_DIR, skip skill installation"
 fi
@@ -1232,22 +1329,16 @@ fi
 # files from ./claude/, so the patch must be re-applied on every run — testing
 # for the hook script alone would skip it and silently leave RTK disabled.
 # `rtk init` is idempotent, so running it unconditionally is safe.
+#
+# Alt accounts need no mirroring: CLAUDE.md and RTK.md are symlinks into
+# ~/.claude, and the hook path rtk writes is absolute, so each account's own
+# settings.json already points at the same hook script. The mirror loop that
+# lived here copied ~/.claude/{RTK.md,CLAUDE.md} onto those symlinks, which cp
+# rejects as "the same file", and copied settings.json over each account's own
+# model and theme.
 if command -v rtk &>/dev/null; then
   echo "[INFO] Setting up RTK Claude Code integration..."
-  if rtk init -g --auto-patch; then
-    # rtk only knows about ~/.claude. The hook path it writes into
-    # settings.json is absolute, so the extra account dirs can share the same
-    # hook script; they just need the patched settings.json / CLAUDE.md plus
-    # their own RTK.md (an `@RTK.md` import resolves next to its CLAUDE.md).
-    for claude_config_dir in "${CLAUDE_CONFIG_DIRS[@]}"; do
-      [[ "$claude_config_dir" == "$HOME/.claude" ]] && continue
-      [[ -d "$claude_config_dir" ]] || continue
-      cp "$HOME/.claude/RTK.md" "$claude_config_dir/RTK.md"
-      cp "$HOME/.claude/settings.json" "$claude_config_dir/settings.json"
-      cp "$HOME/.claude/CLAUDE.md" "$claude_config_dir/CLAUDE.md"
-      echo "[INFO]   Mirrored RTK config -> $claude_config_dir"
-    done
-  else
+  if ! rtk init -g --auto-patch; then
     echo "[WARN] RTK init failed (non-fatal)"
   fi
 fi
@@ -1423,6 +1514,12 @@ if [[ "$HAS_SUDO" == false && "$PKG_MANAGER" != "brew" ]]; then
   echo " - Skipped: bear, build-essential, libssl-dev (need sudo)"
 fi
 echo "===================================="
+if [[ ${#CLAUDE_SHARE_SKIPPED[@]} -gt 0 ]]; then
+  echo
+  echo "[WARN] Not shared into ~/.claude (left untouched):"
+  printf '[WARN]   %s\n' "${CLAUDE_SHARE_SKIPPED[@]}"
+  echo "[WARN] A populated projects/ needs merging first: claude-share --apply"
+fi
 echo
 echo "Remember to:"
 echo "  - chsh -s \$(which zsh)   # change your default shell to zsh (optional)"
